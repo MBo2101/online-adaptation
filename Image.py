@@ -60,7 +60,7 @@ class Image(object):
         return self.__array_3D
         
     def load_image_medpy(self):
-        self.__array_3D, self.__header = load(self.__filepath)
+        self.__array_3D, self.__header = load(self.__path)
         self.__data_type = self.__array_3D.dtype
         self.__origin_x = self.__header.offset[0]
         self.__origin_y = self.__header.offset[1]
