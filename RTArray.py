@@ -12,7 +12,7 @@ from medpy.io import load
 Superclass
 '''
 
-class RTObject3D(object):
+class RTArray(object):
     
     def __init__(self, path):
         self.__path = path
@@ -26,19 +26,22 @@ class RTObject3D(object):
             self.__path = path
         return self.__path
     @property
-    def array_3D(self):
-        return self.__array_3D
+    def ndarray(self):
+        return self.__ndarray
     @property
     def array_1D(self):
-        if self.__array_1D is None:
-            self.__array_1D = self.array_3D_to_1D(self.__array_3D)
-        return self.__array_1D
+        if self.__array_1D is None and self.__ndim == 3:
+            self.__array_1D = self.array_3D_to_1D(self.__ndarray)
+            return self.__array_1D
     @property
     def n_voxels(self):
-        return self.__array_3D.shape[0] * self.__array_3D.shape[1] * self.__array_3D.shape[2]
+        return self.__ndarray.shape[0] * self.__ndarray.shape[1] * self.__ndarray.shape[2]
+    @property
+    def n_dim(self):
+        return self.__ndim
     @property
     def data_type(self):
-        return self.__array_3D.dtype
+        return self.__ndarray.dtype
     @property
     def origin_x(self):
         return self.__header.offset[0]
@@ -50,13 +53,13 @@ class RTObject3D(object):
         return self.__header.offset[2]
     @property
     def size_x(self):
-        return self.__array_3D.shape[0]
+        return self.__ndarray.shape[0]
     @property
     def size_y(self):
-        return self.__array_3D.shape[1]
+        return self.__ndarray.shape[1]
     @property
     def size_z(self):
-        return self.__array_3D.shape[2]
+        return self.__ndarray.shape[2]
     @property
     def spacing_x(self):
         return self.__header.spacing[0]
@@ -78,11 +81,12 @@ class RTObject3D(object):
 
     # Methods
     
-    def load_image_medpy(self):
-        self.__array_3D, self.__header = load(self.__path)
+    def load_file_medpy(self):
+        self.__ndarray, self.__header = load(self.__path)
+        self.__ndim = np.ndim(self.__ndarray)
 
     def print_properties(self):
-        props = [p for p in dir(RTObject3D) if isinstance(getattr(RTObject3D,p), property) and hasattr(self,p)]
+        props = [p for p in dir(RTArray) if isinstance(getattr(RTArray,p), property) and hasattr(self,p)]
         for p in props:
             print(p + ' = ' +str(getattr(self, p)))
     
@@ -100,22 +104,21 @@ class RTObject3D(object):
 Subclasses
 '''
 
-class ImageCT(RTObject3D):
+class ImageCT(RTArray):
     pass
 
-class ImageCBCT(RTObject3D):
+class ImageCBCT(RTArray):
     pass
 
-class ImageMRI(RTObject3D):
+class ImageMRI(RTArray):
     pass
 
-class DoseMap(RTObject3D):
+class DoseMap(RTArray):
     pass
 
-class Structure(RTObject3D):
+class Structure(RTArray):
     pass
 
-class VectorField(RTObject3D):
+class VectorField(RTArray):
     pass
-
 
