@@ -16,6 +16,7 @@ class RTArray(object):
     
     def __init__(self, path):
         self.__path = path
+        self.__ndarray = None
         self.__array_1D = None
 
     # Properties
@@ -30,18 +31,46 @@ class RTArray(object):
         return self.__ndarray
     @property
     def array_1D(self):
-        if self.__array_1D is None and self.__ndim == 3:
-            self.__array_1D = self.array_3D_to_1D(self.__ndarray)
-            return self.__array_1D
+        if self.__array_1D is None:
+            if self.__ndarray is not None:
+                if np.ndim(self.__ndarray) == 3:
+                    return self.array_3D_to_1D(self.__ndarray)
     @property
     def n_voxels(self):
-        return self.__ndarray.shape[0] * self.__ndarray.shape[1] * self.__ndarray.shape[2]
+        if self.__ndarray is not None:
+            return self.__ndarray.shape[0] * self.__ndarray.shape[1] * self.__ndarray.shape[2]
+        else:    
+            return self.__n_voxels
     @property
     def n_dim(self):
-        return self.__ndim
+        if self.__ndarray is not None:
+            return np.ndim(self.__ndarray)
+        else:
+            return self.__ndim
     @property
     def data_type(self):
-        return self.__ndarray.dtype
+        if self.__ndarray is not None:
+            return self.__ndarray.dtype
+        else:
+            return self.__data_type
+    @property
+    def size_x(self):
+        if self.__ndarray is not None:
+            return self.__ndarray.shape[0]
+        else:
+            return self.__size_x
+    @property
+    def size_y(self):
+        if self.__ndarray is not None:
+            return self.__ndarray.shape[1]
+        else:
+            return self.__size_y
+    @property
+    def size_z(self):
+        if self.__ndarray is not None:
+            return self.__ndarray.shape[2]
+        else:
+            return self.__size_z
     @property
     def origin_x(self):
         return self.__header.offset[0]
@@ -51,15 +80,6 @@ class RTArray(object):
     @property
     def origin_z(self):
         return self.__header.offset[2]
-    @property
-    def size_x(self):
-        return self.__ndarray.shape[0]
-    @property
-    def size_y(self):
-        return self.__ndarray.shape[1]
-    @property
-    def size_z(self):
-        return self.__ndarray.shape[2]
     @property
     def spacing_x(self):
         return self.__header.spacing[0]
@@ -78,12 +98,28 @@ class RTArray(object):
     @property
     def direction_z(self):
         return self.__header.direction[2]
+    @property
+    def default_value(self):
+        return None
 
     # Methods
     
-    def load_file_medpy(self):
+    def load_file(self):
         self.__ndarray, self.__header = load(self.__path)
-        self.__ndim = np.ndim(self.__ndarray)
+            
+    def load_header(self):
+        '''
+        Does not store array --> use to save memory
+        Seems to be faster without explicitly deleting 'temp'?
+        '''     
+        temp, self.__header = load(self.__path)
+        self.__n_voxels = temp.shape[0] * temp.shape[1] * temp.shape[2]
+        self.__ndim = np.ndim(temp)
+        self.__data_type = temp.dtype
+        self.__size_x = temp.shape[0]
+        self.__size_y = temp.shape[1]
+        self.__size_z = temp.shape[2]
+        # del temp
 
     def print_properties(self):
         props = [p for p in dir(RTArray) if isinstance(getattr(RTArray,p), property) and hasattr(self,p)]
@@ -104,21 +140,38 @@ class RTArray(object):
 Subclasses
 '''
 
-class ImageCT(RTArray):
+class PatientImage(RTArray):
     pass
 
-class ImageCBCT(RTArray):
-    pass
+class ImageCT(PatientImage):
+    def __init__(self):
+        self.default_value = -1000.
 
-class ImageMRI(RTArray):
+class ImageCBCT(PatientImage):
+    def __init__(self):
+        self.default_value = -1000.
+
+class ImageMRI(PatientImage):
     pass
 
 class DoseMap(RTArray):
-    pass
+    def __init__(self):
+        self.default_value = 0.
 
 class Structure(RTArray):
-    pass
+    def __init__(self):
+        self.default_value = 0.
 
 class VectorField(RTArray):
+    def __init__(self):
+        self.default_value = 0.
+
+class TranslationVF(VectorField):
+    pass
+
+class RigidVF(VectorField):
+    pass
+
+class BSplineVF(VectorField):
     pass
 
