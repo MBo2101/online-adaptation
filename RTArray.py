@@ -18,6 +18,7 @@ class RTArray(object):
         self.__path = path
         self.__ndarray = None
         self.__array_1D = None
+        self.__base_value = None
 
     # Properties
     
@@ -99,8 +100,26 @@ class RTArray(object):
     def direction_z(self):
         return self.__header.direction[2]
     @property
-    def default_value(self):
-        return None
+    def base_value(self):
+        return self.__base_value
+    
+    # Setters
+    
+    @path.setter
+    def path(self, var):
+        self.__path = var
+        
+    @ndarray.setter
+    def ndarray(self, var):
+        self.__ndarray = var
+    
+    @array_1D.setter
+    def array_1D(self, var):
+        self.__array_1D = var
+    
+    @base_value.setter
+    def base_value(self, var):
+        self.__base_value = var
 
     # Methods
     
@@ -119,7 +138,6 @@ class RTArray(object):
         self.__size_x = temp.shape[0]
         self.__size_y = temp.shape[1]
         self.__size_z = temp.shape[2]
-        # del temp
 
     def print_properties(self):
         props = [p for p in dir(RTArray) if isinstance(getattr(RTArray,p), property) and hasattr(self,p)]
@@ -141,37 +159,47 @@ Subclasses
 '''
 
 class PatientImage(RTArray):
-    pass
+    def __init__(self, path):
+        super().__init__(path)
 
 class ImageCT(PatientImage):
-    def __init__(self):
-        self.default_value = -1000.
+    def __init__(self, path):
+        super().__init__(path)
+        self.base_value = -1000.
 
 class ImageCBCT(PatientImage):
-    def __init__(self):
-        self.default_value = -1000.
+    def __init__(self, path):
+        super().__init__(path)
+        self.base_value = -1000.
 
 class ImageMRI(PatientImage):
-    pass
+    def __init__(self, path):
+        super().__init__(path)
 
 class DoseMap(RTArray):
-    def __init__(self):
-        self.default_value = 0.
+    def __init__(self, path):
+        super().__init__(path)
+        self.base_value = 0.
 
 class Structure(RTArray):
-    def __init__(self):
-        self.default_value = 0.
+    def __init__(self, path):
+        super().__init__(path)
+        self.base_value = 0.
 
 class VectorField(RTArray):
-    def __init__(self):
-        self.default_value = 0.
+    def __init__(self, path):
+        super().__init__(path)
+        self.base_value = 0.
 
 class TranslationVF(VectorField):
-    pass
+    def __init__(self, path):
+        super().__init__(path)
 
 class RigidVF(VectorField):
-    pass
+    def __init__(self, path):
+        super().__init__(path)
 
 class BSplineVF(VectorField):
-    pass
+    def __init__(self, path):
+        super().__init__(path)
 
