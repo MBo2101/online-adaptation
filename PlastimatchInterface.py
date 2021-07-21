@@ -160,14 +160,14 @@ class PlastimatchInterface(object):
     def merge_images(background, foreground, output_file_path, *masks):
         '''
         Merges two images (foreground on background).
-        Masks specify voxels where the foreground is applied.
-        Returns RTArray object for the output file (same class as background).
+        Masks (Structure class) specify voxels where the foreground is applied.
+        Returns RTArray object for the output file (same class as foreground).
         
         Args:
             background --> instance of RTArray class for background image file
             foreground --> instance of RTArray class for foreground image file
             output_file_path --> path to output image file (string)
-            masks --> paths to masks (list of strings)
+            masks --> instances of Structure class for masks
         '''
         supported_cls = (RTArray,)
         PlastimatchInterface.__input_check(background, supported_cls)
@@ -212,7 +212,7 @@ class PlastimatchInterface(object):
         os.remove(os.path.join(dirpath, 'background_temp.mha'))
         os.remove(os.path.join(dirpath, 'mask_temp.mha'))
         
-        return background.__class__(output_file_path)
+        return foreground.__class__(output_file_path)
     
     @staticmethod
     def scale_image_linear(input_file, output_file_path, *parameters):
@@ -282,7 +282,7 @@ class PlastimatchInterface(object):
         Args:
             input_file --> instance of PatientImage or DoseMap
             output_file_path --> path to output file (string)
-            weight --> multiplication factor (float or int)
+            weight --> multiplication weight (float or int)
         '''     
         supported_cls = (PatientImage, DoseMap)
         PlastimatchInterface.__input_check(input_file, supported_cls)
@@ -417,6 +417,7 @@ class PlastimatchInterface(object):
     def warp_image(input_file, output_file_path, vf_file, default_value=None):
         '''
         Warps image using an input vector field.
+        For Structure use "warp_mask" instead.
         Returns RTArray object for the output file (same class as input_file).
         
         Args:
