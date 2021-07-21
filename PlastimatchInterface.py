@@ -414,6 +414,28 @@ class PlastimatchInterface(object):
         return input_file.__class__(output_file_path)
 
     @staticmethod
+    def get_translation_vf_shifts(vf_file):
+        '''
+        Returns shifts of a 3-DOF vector field as a dictionary.
+        
+        Args:
+            vf_file --> instance of TranslationVF class
+        '''
+        supported_cls = (TranslationVF,)
+        PlastimatchInterface.__input_check(vf_file, supported_cls)
+        
+        vf_file.load_file()
+        
+        # Assuming each voxel receives the same shift:
+        voxel = vf_file.ndarray[0][0][0]
+        
+        shifts = {'x_shift' : voxel[0],
+                  'y_shift' : voxel[1],
+                  'z_shift' : voxel[2]}
+                
+        return shifts
+
+    @staticmethod
     def warp_image(input_file, output_file_path, vf_file, default_value=None):
         '''
         Warps image using an input vector field.
