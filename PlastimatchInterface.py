@@ -466,14 +466,175 @@ class PlastimatchInterface(object):
         warp.wait()
         
         return input_file.__class__(output_file_path)
+    
+    @staticmethod
+    def mask_image(input_file, output_file_path, mask, mask_value=None):
+        '''
+        Masks image using an input mask.
+        Returns RTArray object for the output file (same class as input_file).
+        
+        Args:
+            input_file --> instance of RTArray class (except Structure)
+            output_file_path --> path to output file (string)
+            mask --> instance of Structure class
+            mask_value --> numeric value that is applied to the background (float)
+                       --> will be applied according to class if not specified
+        '''
+        supported_cls = (PatientImage, DoseMap, VectorField)
+        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchInterface.__input_check(mask, (Structure,))
+        
+        mask_value = input_file.base_value if mask_value == None else mask_value
+        
+        mask = subprocess.Popen(['plastimatch','mask',
+                                 '--input', input_file.path,
+                                 '--output', output_file_path,
+                                 '--mask', mask.path,
+                                 '--mask-value', str(mask_value)
+                                 ])
+        mask.wait()
+        
+        return input_file.__class__(output_file_path)
 
-    # Structure methods
+    @staticmethod
+    def convert_dicom_folder(input_dicom_folder, output_image, structures=None, dose_map=None):
+        '''
+        Function extracts images from dicom folder.
+        
+        Args:
+            input_dicom_folder --> path to input dicom folder (string)
+            output_image --> path to output image file (string)
+            structures --> path to folder for structures (string)
+            dose_map --> path to output dose image file (string)
+        '''
+        # TODO: modify method once we have appropriate classes like e.g. Patient, StructureSet, DicomFolder etc.
+        get_image = subprocess.Popen(['plastimatch','convert',
+                                      '--input', input_dicom_folder,
+                                      '--output-type', 'float',
+                                      '--output-img', output_image,
+                                      ])
+        get_image.wait()
+            
+        if structures != None:
+            get_structures = subprocess.Popen(['plastimatch','convert',
+                                               '--input', input_dicom_folder,
+                                               '--fixed', output_image,
+                                               '--output-type', 'float',
+                                               '--output-prefix', structures,
+                                               ])
+            get_structures.wait()
+            
+        if dose_map != None:
+            get_dose_map = subprocess.Popen(['plastimatch','convert',
+                                             '--input', input_dicom_folder,
+                                             '--fixed', output_image,
+                                             '--output-type', 'float',
+                                             '--output-dose-img', dose_map,
+                                             ])
+            get_dose_map.wait()
+
+    #%% Structure methods
+    
+    @staticmethod
+    def expand_mask(input_mask, output_mask_path, distance=0):
+        '''
+        Expands mask.
+        Returns Structure object for output mask file.
+        
+        Args:
+            input_mask --> instance of Structure class
+            output_mask_path --> path to output mask file (string)
+            distance --> expansion in mm (int or float)
+        '''
+        supported_cls = (Structure,)
+        PlastimatchInterface.__input_check(input_mask, supported_cls)
+        
+        dirpath = os.path.dirname(input_mask)
+        
+        get_dmap = subprocess.Popen(['plastimatch','dmap',
+                                     '--input', input_mask.path,
+                                     # '--algorithm', 'maurer',
+                                     '--output', 'mask_dmap_temp.mha',
+                                     ], cwd = dirpath)
+        get_dmap.wait()
+                                 
+        threshold_mask = subprocess.Popen(['plastimatch','threshold',
+                                           '--input', 'mask_dmap_temp.mha',
+                                           '--output', output_mask_path,
+                                           '--below', '{}'.format(distance)
+                                           ], cwd = dirpath)  
+        threshold_mask.wait()
+        
+        os.remove(os.path.join(dirpath, 'mask_dmap_temp.mha'))
+        
+        return Structure(output_mask_path)
+
+    @staticmethod
+    def invert_mask(input_mask, output_mask_path):
+        '''
+        Inverts mask.
+        Returns Structure object for output mask file.
+        
+        Args:
+            input_mask --> instance of Structure class
+            output_mask_path --> path to output mask file (string)
+        '''
+        supported_cls = (Structure,)
+        PlastimatchInterface.__input_check(input_mask, supported_cls)
+        
+        threshold = subprocess.Popen(['plastimatch','threshold',
+                                      '--input', input_mask.path,
+                                      '--output', output_mask_path,
+                                      '--below', '0.5'
+                                      ])
+        threshold.wait()
+        
+        return Structure(output_mask_path)
+
+    @staticmethod
+    def warp_mask(input_mask, output_mask_path, vf_file):
+        '''
+        Warps mask using an input vector field.
+        This method does not lose voxels due to resampling.
+        Returns Structure object for output mask file.
+        
+        Args:
+            input_mask --> instance of Structure class
+            output_mask_path --> path to output mask file (string)
+            vf_file --> instance of VectorField class
+        '''
+        supported_cls = (Structure,)
+        PlastimatchInterface.__input_check(input_mask, supported_cls)
+        PlastimatchInterface.__input_check(vf_file, (VectorField,))
+    
+        convert_mask = subprocess.Popen(['plastimatch','convert',
+                                         '--input', input_mask.path,
+                                         '--output-img', output_mask_path,
+                                         '--output-type', 'float'
+                                         ])
+        convert_mask.wait()
+        
+        warp_mask = subprocess.Popen(['plastimatch','convert',
+                                      '--input', output_mask_path,
+                                      '--output-img', output_mask_path,
+                                      '--xf', vf_file.path
+                                      ])
+        warp_mask.wait()
+        
+        threshold = subprocess.Popen(['plastimatch','threshold',
+                                      '--input', output_mask_path,
+                                      '--output', output_mask_path,
+                                      '--above', '0.5'
+                                      ])
+        threshold.wait()
+        
+        return Structure(output_mask_path)
 
     @staticmethod
     def get_union(output_mask_path, *masks):
         '''
         Generates union of provided masks.
-        Returns Structure object for the output mask file.
+        Returns Structure object for output mask file.
         
         Args:
             output_mask_path --> path to output mask file (string)
@@ -492,14 +653,124 @@ class PlastimatchInterface(object):
         
             union = subprocess.Popen(['plastimatch', 'union',
                                       output_mask_path,
-                                      mask,
+                                      mask.path,
                                       '--output', output_mask_path,
                                       ])
             union.wait()
             
         return Structure(output_mask_path)
-    
-    
+
+    @staticmethod
+    def get_intersection(output_mask_path, *masks):
+        '''
+        Generates intersection of provided masks.
+        Returns Structure object for output mask file.
+        
+        Args:
+            output_mask_path --> path to output mask file (string)
+            masks --> Strucutre objects of input masks
+        '''
+        supported_cls = (Structure,)
+        
+        if len(masks) < 2:
+            raise Exception('Need at least two mask files.')
             
+        all(PlastimatchInterface.__input_check(mask, supported_cls) for mask in masks)
+        
+        shutil.copyfile(masks[0].path, output_mask_path)
+        
+        for mask in masks[1:]:
+        
+            add_masks = subprocess.Popen(['plastimatch', 'add',
+                                          output_mask_path,
+                                          mask.path,
+                                          '--output', output_mask_path,
+                                          ])
+            add_masks.wait()
+    
+        threshold = subprocess.Popen(['plastimatch','threshold',
+                                      '--input', output_mask_path,
+                                      '--output', output_mask_path,
+                                      '--above', str(len(masks))
+                                      ])
+        threshold.wait()
+        
+        return Structure(output_mask_path)
+
+    @staticmethod
+    def exclude_mask(input_mask, output_mask_path, *excluded_masks):
+        '''
+        Excludes one mask from another (logical minus).
+        Returns Structure object for output mask file.
+        
+        Args:
+            input_mask --> instance of Structure class
+            output_mask_path --> path to output mask file (string)
+            excluded_masks --> Strucutre objects of masks to exclude from input_mask
+        '''
+        # TODO: Check if function works well.
+        supported_cls = (Structure,)
+        PlastimatchInterface.__input_check(input_mask, supported_cls)
+        
+        if len(excluded_masks) < 1:
+            raise Exception('Need at least one mask file to exclude.')
+            
+        all(PlastimatchInterface.__input_check(mask, supported_cls) for mask in excluded_masks)
+        
+        shutil.copyfile(input_mask.path, output_mask_path)
+        
+        for mask in excluded_masks:
+        
+            subtract = subprocess.Popen(['plastimatch','diff',
+                                         '{}'.format(output_mask_path),
+                                         '{}'.format(mask.path),
+                                         output_mask_path
+                                         ])  
+            subtract.wait()
+        
+        convert = subprocess.Popen(['plastimatch','convert',
+                                    '--input', output_mask_path,
+                                    '--output-type', 'uchar',
+                                    '--output-img', output_mask_path,
+                                    ])
+        convert.wait()
+        
+        return Structure(output_mask_path)
+    
+    @staticmethod
+    def get_empty_mask(reference_image, output_mask_path, values='zeros'):
+        '''
+        Creates empty mask based on reference image.
+        Returns Structure object for output mask file.
+        
+        Args:
+            reference_image --> instance of RTArray class
+            output_mask_path --> path to output mask file (string)
+            values --> values of output mask, 'zeros' or 'ones' (string)
+        '''
+        supported_cls = (RTArray,)
+        PlastimatchInterface.__input_check(reference_image, supported_cls)
+    
+        stats = PlastimatchInterface.get_stats(reference_image)
+        
+        if values == 'zeros':
+            threshold_value = stats['MIN'] - 1
+        
+        elif values == 'ones':
+            threshold_value = stats['MAX'] + 1
+    
+        threshold = subprocess.Popen(['plastimatch','threshold',
+                                      '--input', reference_image.path,
+                                      '--output', output_mask_path,
+                                      '--below', str(threshold_value),
+                                      ])
+        threshold.wait()
+    
+        return Structure(output_mask_path)
+    
+        #%% Image registration methods
         
         
+
+
+
