@@ -698,9 +698,9 @@ class PlastimatchInterface(object):
         return Structure(output_mask_path)
 
     @staticmethod
-    def exclude_mask(input_mask, output_mask_path, *excluded_masks):
+    def exclude_masks(input_mask, output_mask_path, *excluded_masks):
         '''
-        Excludes one mask from another (logical minus).
+        Excludes masks from "input_mask" (logical minus).
         Returns Structure object for output mask file.
         
         Args:
