@@ -20,7 +20,7 @@ class PlastimatchInterface(object):
 
     def __input_check(input_file, supported_cls):
         '''
-        Method to check input
+        Method to check input.
         
         Args:
             input_file --> instance of RTArray class
@@ -30,6 +30,50 @@ class PlastimatchInterface(object):
             raise TypeError('Wrong input')
         else:
             return True
+        
+    def image_registration_global(**kwargs):
+        '''
+        Use to define global part of Plastimatch command file.
+        '''
+        known_keywords = ['fixed',
+                          'moving',
+                          'vf_out',
+                          'img_out',
+                          'fixed_mask',
+                          'moving_mask',
+                          'default_value']
+        
+        if all([k in known_keywords for k in kwargs]) != True:
+            raise TypeError('Unknown keyword argument')
+        
+        command_file_string = '[GLOBAL]'
+        for k in kwargs:
+            if kwargs[k] != None:
+                command_file_string = command_file_string + '\n{}={}'.format(k, kwargs[k])
+        return command_file_string + '\n'
+    
+    def image_registration_stage(**kwargs):
+        '''
+        Use to define stages in Plastimatch command file.
+        '''
+        known_keywords = ['res',
+                          'impl',
+                          'optim',
+                          'xform',
+                          'metric',
+                          'max_its',
+                          'threading',
+                          'grid_spac',
+                          'regularization_lambda']
+        
+        if all([k in known_keywords for k in kwargs]) != True:
+            raise TypeError('Unknown keyword argument')
+        
+        command_file_string = '\n[STAGE]'
+        for k in kwargs:
+            if kwargs[k] != None:
+                command_file_string = command_file_string + '\n{}={}'.format(k, kwargs[k])
+        return command_file_string + '\n'
     
     # Static methods
     
@@ -416,7 +460,7 @@ class PlastimatchInterface(object):
     @staticmethod
     def get_translation_vf_shifts(vf_file):
         '''
-        Returns shifts of a 3-DOF vector field as a dictionary.
+        Returns shifts of a 3-DOF vector field in mm.
         
         Args:
             vf_file --> instance of TranslationVF class
@@ -429,11 +473,11 @@ class PlastimatchInterface(object):
         # Assuming each voxel receives the same shift:
         voxel = vf_file.ndarray[0][0][0]
         
-        shifts = {'x_shift' : voxel[0],
-                  'y_shift' : voxel[1],
-                  'z_shift' : voxel[2]}
+        shift_x = voxel[0]
+        shift_y = voxel[1]
+        shift_z = voxel[2]
                 
-        return shifts
+        return shift_x, shift_y, shift_z
 
     @staticmethod
     def warp_image(input_file, output_file_path, vf_file, default_value=None):
@@ -768,9 +812,350 @@ class PlastimatchInterface(object):
     
         return Structure(output_mask_path)
     
-        #%% Image registration methods
-        
-        
+    #%% Image registration methods
 
+    @staticmethod
+    def register_deformable_bspline(fixed_image,
+                                    moving_image,
+                                    output_image_path=None,
+                                    output_vf_path=None,
+                                    fixed_mask=None,
+                                    moving_mask=None,
+                                    metric='mse'):
+        '''
+        Writes Plastimatch command file and runs deformable image registration.
+        Returns appropriate objects for output image and/or output vector field.
+        
+        Args:
+            fixed_image --> instance of PatientImage class
+            moving_image --> instance of PatientImage class
+            output_image_path --> path to output image file (string)
+            output_vf_path --> path to output vector field file (string)
+            fixed_mask --> instance of Structure class
+            moving_mask --> instance of Structure class
+            metric --> cost function metric to optimize (string)
+        '''
+        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
+        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        
+        if fixed_mask != None:
+            PlastimatchInterface.__input_check(fixed_mask, (Structure,))
+            fixed_mask_path = fixed_mask.path
+        else:
+            fixed_mask_path = None
+            
+        if moving_mask != None:
+            PlastimatchInterface.__input_check(moving_mask, (Structure,))
+            moving_mask_path = moving_mask.path
+        else:
+            moving_mask_path = None
 
+        dirpath = os.path.dirname(moving_image.path)
+        command_file_path = os.path.join(dirpath, 'register_bspline_command_file.txt')
+    
+        with open(command_file_path, 'w') as f:
+            
+            f.write(PlastimatchInterface.image_registration_global(fixed = fixed_image.path,
+                                                                   moving = moving_image.path,
+                                                                   img_out = output_image_path,
+                                                                   vf_out = output_vf_path,
+                                                                   fixed_mask = fixed_mask_path,
+                                                                   moving_mask = moving_mask_path,
+                                                                   default_value = moving_image.base_value))
+            
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
+                                                                  optim = 'lbfgsb',
+                                                                  impl = 'plastimatch',
+                                                                  threading = 'cuda',
+                                                                  max_its = 50,
+                                                                  grid_spac = '100 100 100',
+                                                                  res = '8 8 4',
+                                                                  regularization_lambda = 1,
+                                                                  metric = metric))
+                                                                  
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
+                                                                  optim = 'lbfgsb',
+                                                                  impl = 'plastimatch',
+                                                                  threading = 'cuda',
+                                                                  max_its = 50,
+                                                                  grid_spac = '80 80 80',
+                                                                  res = '4 4 2',
+                                                                  regularization_lambda = 0.1,
+                                                                  metric = metric))
+                    
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
+                                                                  optim = 'lbfgsb',
+                                                                  impl = 'plastimatch',
+                                                                  threading = 'cuda',
+                                                                  max_its = 40,
+                                                                  grid_spac = '60 60 60',
+                                                                  res = '2 2 1',
+                                                                  regularization_lambda = 0.1,
+                                                                  metric = metric))
+            
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
+                                                                  optim = 'lbfgsb',
+                                                                  impl = 'plastimatch',
+                                                                  threading = 'cuda',
+                                                                  max_its = 40,
+                                                                  grid_spac = '20 20 20',
+                                                                  res = '1 1 1',
+                                                                  regularization_lambda = 0.01,
+                                                                  metric = metric))
+            
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
+                                                                  optim = 'lbfgsb',
+                                                                  impl = 'plastimatch',
+                                                                  threading = 'cuda',
+                                                                  max_its = 40,
+                                                                  grid_spac = '10 10 10',
+                                                                  res = '1 1 1',
+                                                                  regularization_lambda = 0.01,
+                                                                  metric = metric))
+        
+        DIR = subprocess.Popen(['plastimatch', command_file_path], cwd = dirpath)
+        DIR.wait()
+        
+        if output_image_path != None and output_vf_path != None:
+            return moving_image.__class__(output_image_path), BSplineVF(output_vf_path)
+            
+        elif output_image_path != None and output_vf_path == None:
+            return moving_image.__class__(output_image_path)
+        
+        elif output_image_path == None and output_vf_path != None:
+            return BSplineVF(output_vf_path)
+
+    @staticmethod
+    def register_3_DOF(fixed_image,
+                       moving_image,
+                       output_image_path=None,
+                       output_vf_path=None,
+                       fixed_mask=None,
+                       moving_mask=None,
+                       metric='mse'):
+        '''
+        Writes Plastimatch command file and runs 3-DOF image registration.
+        Returns appropriate objects for output image and/or output vector field.
+        
+        Args:
+            fixed_image --> instance of PatientImage class
+            moving_image --> instance of PatientImage class
+            output_image_path --> path to output image file (string)
+            output_vf_path --> path to output vector field file (string)
+            fixed_mask --> instance of Structure class
+            moving_mask --> instance of Structure class
+            metric --> cost function metric to optimize (string)
+        '''
+        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
+        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        
+        if fixed_mask != None:
+            PlastimatchInterface.__input_check(fixed_mask, (Structure,))
+            fixed_mask_path = fixed_mask.path
+        else:
+            fixed_mask_path = None
+            
+        if moving_mask != None:
+            PlastimatchInterface.__input_check(moving_mask, (Structure,))
+            moving_mask_path = moving_mask.path
+        else:
+            moving_mask_path = None
+
+        dirpath = os.path.dirname(moving_image.path)
+        command_file_path = os.path.join(dirpath, 'register_3_DOF_command_file.txt')
+    
+        with open(command_file_path, 'w') as f:
+            
+            f.write(PlastimatchInterface.image_registration_global(fixed = fixed_image.path,
+                                                                   moving = moving_image.path,
+                                                                   img_out = output_image_path,
+                                                                   vf_out = output_vf_path,
+                                                                   fixed_mask = fixed_mask_path,
+                                                                   moving_mask = moving_mask_path,
+                                                                   default_value = moving_image.base_value))
+            
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'translation',
+                                                                  optim = 'rsg',
+                                                                  threading = 'cuda',
+                                                                  max_its = 200,
+                                                                  res = '8 8 4',
+                                                                  metric = metric))
+                                                                  
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'translation',
+                                                                  optim = 'rsg',
+                                                                  threading = 'cuda',
+                                                                  max_its = 200,
+                                                                  res = '4 4 2',
+                                                                  metric = metric))
+                    
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'translation',
+                                                                  optim = 'rsg',
+                                                                  threading = 'cuda',
+                                                                  max_its = 200,
+                                                                  res = '2 2 1',
+                                                                  metric = metric))
+        
+        register_3_DOF = subprocess.Popen(['plastimatch', command_file_path], cwd = dirpath)
+        register_3_DOF.wait()
+        
+        if output_image_path != None and output_vf_path != None:
+            return moving_image.__class__(output_image_path), TranslationVF(output_vf_path)
+            
+        elif output_image_path != None and output_vf_path == None:
+            return moving_image.__class__(output_image_path)
+        
+        elif output_image_path == None and output_vf_path != None:
+            return TranslationVF(output_vf_path)
+
+    @staticmethod
+    def register_6_DOF(fixed_image,
+                       moving_image,
+                       output_image_path=None,
+                       output_vf_path=None,
+                       fixed_mask=None,
+                       moving_mask=None,
+                       metric='mse'):
+        '''
+        Writes Plastimatch command file and runs 6-DOF image registration.
+        Returns appropriate objects for output image and/or output vector field.
+        
+        Args:
+            fixed_image --> instance of PatientImage class
+            moving_image --> instance of PatientImage class
+            output_image_path --> path to output image file (string)
+            output_vf_path --> path to output vector field file (string)
+            fixed_mask --> instance of Structure class
+            moving_mask --> instance of Structure class
+            metric --> cost function metric to optimize (string)
+        '''
+        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
+        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        
+        if fixed_mask != None:
+            PlastimatchInterface.__input_check(fixed_mask, (Structure,))
+            fixed_mask_path = fixed_mask.path
+        else:
+            fixed_mask_path = None
+            
+        if moving_mask != None:
+            PlastimatchInterface.__input_check(moving_mask, (Structure,))
+            moving_mask_path = moving_mask.path
+        else:
+            moving_mask_path = None
+
+        dirpath = os.path.dirname(moving_image.path)
+        command_file_path = os.path.join(dirpath, 'register_6_DOF_command_file.txt')
+    
+        with open(command_file_path, 'w') as f:
+            
+            f.write(PlastimatchInterface.image_registration_global(fixed = fixed_image.path,
+                                                                   moving = moving_image.path,
+                                                                   img_out = output_image_path,
+                                                                   vf_out = output_vf_path,
+                                                                   fixed_mask = fixed_mask_path,
+                                                                   moving_mask = moving_mask_path,
+                                                                   default_value = moving_image.base_value))
+            
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'rigid',
+                                                                  optim = 'versor',
+                                                                  threading = 'cuda',
+                                                                  max_its = 200,
+                                                                  res = '8 8 4',
+                                                                  metric = metric))
+                                                                  
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'rigid',
+                                                                  optim = 'versor',
+                                                                  threading = 'cuda',
+                                                                  max_its = 200,
+                                                                  res = '4 4 2',
+                                                                  metric = metric))
+                    
+            f.write(PlastimatchInterface.image_registration_stage(xform = 'rigid',
+                                                                  optim = 'versor',
+                                                                  threading = 'cuda',
+                                                                  max_its = 200,
+                                                                  res = '2 2 1',
+                                                                  metric = metric))
+        
+        register_6_DOF = subprocess.Popen(['plastimatch', command_file_path], cwd = dirpath)
+        register_6_DOF.wait()
+        
+        if output_image_path != None and output_vf_path != None:
+            return moving_image.__class__(output_image_path), RigidVF(output_vf_path)
+            
+        elif output_image_path != None and output_vf_path == None:
+            return moving_image.__class__(output_image_path)
+        
+        elif output_image_path == None and output_vf_path != None:
+            return RigidVF(output_vf_path)
+        
+    @staticmethod
+    def match_position_3_DOF(fixed_image, moving_image, output_image_path, output_vf_path, metric='mse'):
+        '''
+        Matches patient position with a 3-DOF vector field.
+        Retains original image dimensions/size/spacing.
+        Returns appropriate objects for output image and vector field.
+        
+        Args:
+            fixed_image --> instance of PatientImage class
+            moving_image --> instance of PatientImage class
+            output_image_path --> path to output image file (string)
+            output_vf_path --> path to output vector field file (string)
+            metric --> cost function metric to optimize (string)
+        '''
+        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
+        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        
+        dirpath = os.path.dirname(output_vf_path)
+        vf_temp_path = os.path.join(dirpath, 'vt_temp.mha')
+        
+        vf_temp = PlastimatchInterface.register_3_DOF(fixed_image,
+                                                      moving_image,
+                                                      output_vf_path = vf_temp_path,
+                                                      metric = metric)
+        
+        x,y,z = PlastimatchInterface.get_translation_vf_shifts(vf_temp)
+        os.remove(vf_temp.path)
+        
+        PlastimatchInterface.apply_manual_translation(moving_image,
+                                                      output_image_path,
+                                                      -x, -y, -z,
+                                                      unit = 'mm',
+                                                      frame = 'shift',
+                                                      discrete_voxels = True)
+        
+        return moving_image.__class__(output_image_path), TranslationVF(output_vf_path)
+    
+    @staticmethod
+    def propagate_contours(fixed_image,
+                           moving_image,
+                           input_contours,
+                           output_contours,
+                           output_image_path,
+                           output_vf_path):
+        '''
+        Propagates contours from one image to another.
+        Assumes both images are matched in 3D (translation or rigid).
+        Returns appropriate objects for output image and/or output vector field.
+        
+        Args:
+            fixed_image --> instance of PatientImage class
+            moving_image --> instance of PatientImage class
+            input_contours --> path to folder containing input structure files (string)
+            output_contours --> path to folder to store deformed structures (string)
+            output_image_path --> path to output image file (string)
+            output_vf_path --> path to output vector field file (string)
+        '''
+        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
+        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        
+        _, vf = PlastimatchInterface.register_deformable_bspline(fixed_image,
+                                                                 moving_image,
+                                                                 output_image_path,
+                                                                 output_vf_path)
+        
+        for filename in os.listdir(input_contours):
+            if os.path.isfile(os.path.join(input_contours, filename)):
+                PlastimatchInterface.warp_mask(Structure(os.path.join(input_contours, filename)), 
+                                               os.path.join(output_contours, filename), vf)
 
