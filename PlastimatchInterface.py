@@ -33,7 +33,7 @@ class PlastimatchInterface(object):
         
     def image_registration_global(**kwargs):
         '''
-        Use to define global part of Plastimatch command file.
+        Use to define global parameters of Plastimatch command file.
         '''
         known_keywords = ['fixed',
                           'moving',
@@ -343,17 +343,19 @@ class PlastimatchInterface(object):
     @staticmethod
     def apply_manual_translation(input_file,
                                  output_file_path,
+                                 output_vf_path,
                                  x, y, z,
                                  unit='mm',
                                  frame='shift',
                                  discrete_voxels=False):
         '''
         Applies manual translation to input image, dose, structure or vector field.
-        Returns RTArray object for the output file (same class as input_file).
+        Returns RTArray object for output file as well as TranslationVF.
         
         Args:
             input_file --> instance of RTArray class
             output_file_path --> path to output file (string)
+            output_vf_path --> path to output vector field (string)
             x, y, z --> parameters for 3D shift in mm (int or float)
             unit --> specifies unit for shift distance, "vox" or "mm" (str)
             frame --> specifies how image frame is handled, "shift" or "fix" (str)
@@ -364,7 +366,7 @@ class PlastimatchInterface(object):
         
         dirpath = os.path.dirname(input_file.path)
         temp_path = os.path.join(dirpath, 'ext_temp.mha')
-        vf_file = VectorField(os.path.join(dirpath, 'translation_vf.mha'))
+        translation_vf = TranslationVF(output_vf_path)
         
         input_file.load_header()
         
@@ -401,21 +403,22 @@ class PlastimatchInterface(object):
             x_lower = abs(x)
         elif x < 0:
             x_upper = abs(x)
-            
         if y > 0:
             y_lower = abs(y)
         elif y < 0:
             y_upper = abs(y)
-            
         if z > 0:
             z_lower = abs(z)
         elif z < 0:
             z_upper = abs(z)
         
-        PlastimatchInterface.extend_or_crop(input_file, temp_path, x_lower, x_upper, y_lower, y_upper, z_lower, z_upper, unit)
-        
+        PlastimatchInterface.extend_or_crop(input_file,
+                                            temp_path,
+                                            x_lower, x_upper,
+                                            y_lower, y_upper,
+                                            z_lower, z_upper,
+                                            unit)
         if unit == 'vox':
-            
             x = x * input_file.spacing_x
             y = y * input_file.spacing_y
             z = z * input_file.spacing_z
@@ -423,13 +426,13 @@ class PlastimatchInterface(object):
         translation_str = '"{} {} {}"'.format(x, y, z)
         
         create_vf = subprocess.Popen(['plastimatch synth-vf --fixed {} --xf-trans {} --output {}'
-                                      .format(temp_path, translation_str, vf_file.path)
+                                      .format(temp_path, translation_str, translation_vf.path)
                                       ], cwd = dirpath, shell=True)
         create_vf.wait()
         
         PlastimatchInterface.warp_image(input_file,
                                         output_file_path,
-                                        vf_file)
+                                        translation_vf)
         
         os.remove(temp_path)
     
@@ -455,7 +458,7 @@ class PlastimatchInterface(object):
               'z = {} mm | = {} voxels'\
               .format(-x, -x/input_file.spacing_x, -y, -y/input_file.spacing_y, -z, -z/input_file.spacing_z))
             
-        return input_file.__class__(output_file_path)
+        return input_file.__class__(output_file_path), translation_vf
 
     @staticmethod
     def get_translation_vf_shifts(vf_file):
@@ -576,6 +579,30 @@ class PlastimatchInterface(object):
                                              '--output-dose-img', dose_map,
                                              ])
             get_dose_map.wait()
+
+    @staticmethod
+    def resample_to_reference(input_file, output_file_path, reference_image):
+        '''
+        Resamples RTArray based on reference image.
+        Returns RTArray object for the output file (same class as input_file).
+        
+        Args:
+            input_file --> instance of RTArray class
+            output_file_path --> path to output file (string)
+            reference_image --> instance of RTArray class
+        '''
+        supported_cls = (RTArray,)
+        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchInterface.__input_check(reference_image, supported_cls)
+    
+        resample = subprocess.Popen(['plastimatch','resample',
+                                      '--input', input_file.path,
+                                      '--output', output_file_path,
+                                      '--fixed', reference_image.path
+                                      ])
+        resample.wait()
+        
+        return input_file.__class__(output_file_path)
 
     #%% Structure methods
     
@@ -840,15 +867,11 @@ class PlastimatchInterface(object):
         
         if fixed_mask != None:
             PlastimatchInterface.__input_check(fixed_mask, (Structure,))
-            fixed_mask_path = fixed_mask.path
-        else:
-            fixed_mask_path = None
-            
         if moving_mask != None:
             PlastimatchInterface.__input_check(moving_mask, (Structure,))
-            moving_mask_path = moving_mask.path
-        else:
-            moving_mask_path = None
+            
+        fixed_mask_path  = fixed_mask.path  if fixed_mask  != None else None
+        moving_mask_path = moving_mask.path if moving_mask != None else None
 
         dirpath = os.path.dirname(moving_image.path)
         command_file_path = os.path.join(dirpath, 'register_bspline_command_file.txt')
@@ -951,15 +974,11 @@ class PlastimatchInterface(object):
         
         if fixed_mask != None:
             PlastimatchInterface.__input_check(fixed_mask, (Structure,))
-            fixed_mask_path = fixed_mask.path
-        else:
-            fixed_mask_path = None
-            
         if moving_mask != None:
             PlastimatchInterface.__input_check(moving_mask, (Structure,))
-            moving_mask_path = moving_mask.path
-        else:
-            moving_mask_path = None
+            
+        fixed_mask_path  = fixed_mask.path  if fixed_mask  != None else None
+        moving_mask_path = moving_mask.path if moving_mask != None else None
 
         dirpath = os.path.dirname(moving_image.path)
         command_file_path = os.path.join(dirpath, 'register_3_DOF_command_file.txt')
@@ -1033,15 +1052,11 @@ class PlastimatchInterface(object):
         
         if fixed_mask != None:
             PlastimatchInterface.__input_check(fixed_mask, (Structure,))
-            fixed_mask_path = fixed_mask.path
-        else:
-            fixed_mask_path = None
-            
         if moving_mask != None:
             PlastimatchInterface.__input_check(moving_mask, (Structure,))
-            moving_mask_path = moving_mask.path
-        else:
-            moving_mask_path = None
+            
+        fixed_mask_path  = fixed_mask.path  if fixed_mask  != None else None
+        moving_mask_path = moving_mask.path if moving_mask != None else None
 
         dirpath = os.path.dirname(moving_image.path)
         command_file_path = os.path.join(dirpath, 'register_6_DOF_command_file.txt')
@@ -1119,6 +1134,7 @@ class PlastimatchInterface(object):
         
         PlastimatchInterface.apply_manual_translation(moving_image,
                                                       output_image_path,
+                                                      output_vf_path,
                                                       -x, -y, -z,
                                                       unit = 'mm',
                                                       frame = 'shift',
@@ -1127,35 +1143,54 @@ class PlastimatchInterface(object):
         return moving_image.__class__(output_image_path), TranslationVF(output_vf_path)
     
     @staticmethod
-    def propagate_contours(fixed_image,
-                           moving_image,
-                           input_contours,
+    def propagate_contours(input_contours,
                            output_contours,
+                           fixed_image,
+                           moving_image,
                            output_image_path,
-                           output_vf_path):
+                           output_vf_path,
+                           moving_mask=None,
+                           apply_fixed_box=False):
         '''
         Propagates contours from one image to another.
         Assumes both images are matched in 3D (translation or rigid).
-        Returns appropriate objects for output image and/or output vector field.
+        Returns appropriate objects for output image and vector field.
         
         Args:
-            fixed_image --> instance of PatientImage class
-            moving_image --> instance of PatientImage class
             input_contours --> path to folder containing input structure files (string)
             output_contours --> path to folder to store deformed structures (string)
+            fixed_image --> instance of PatientImage class
+            moving_image --> instance of PatientImage class
             output_image_path --> path to output image file (string)
             output_vf_path --> path to output vector field file (string)
+            moving_mask --> instance of Structure class for moving mask
+            apply_fixed_box --> option to use box as fixed mask (bool)
         '''
         PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
         PlastimatchInterface.__input_check(moving_image, (PatientImage,))
         
-        _, vf = PlastimatchInterface.register_deformable_bspline(fixed_image,
-                                                                 moving_image,
-                                                                 output_image_path,
-                                                                 output_vf_path)
+        if apply_fixed_box == True:
+            box_temp_path = os.path.join(output_contours, 'box_temp.mha')
+            box_temp = PlastimatchInterface.get_empty_mask(moving_image, box_temp_path, values='ones')
+            fixed_mask = PlastimatchInterface.resample_to_reference(box_temp, box_temp.path, fixed_image)
+        else:
+            fixed_mask = None
+        
+        img, vf = PlastimatchInterface.register_deformable_bspline(fixed_image,
+                                                                   moving_image,
+                                                                   output_image_path,
+                                                                   output_vf_path,
+                                                                   fixed_mask,
+                                                                   moving_mask)
+        
+        if apply_fixed_box == True:
+            os.remove(fixed_mask.path)
         
         for filename in os.listdir(input_contours):
             if os.path.isfile(os.path.join(input_contours, filename)):
                 PlastimatchInterface.warp_mask(Structure(os.path.join(input_contours, filename)), 
                                                os.path.join(output_contours, filename), vf)
+
+        return img, vf
+    
 
