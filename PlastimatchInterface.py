@@ -31,6 +31,39 @@ class PlastimatchInterface(object):
         else:
             return True
         
+    def run(command, *args, **kwargs):
+        '''
+        Use to run Plastimatch with subprocess.Popen module.
+        For keyword arguments use '_' instead of '-' --> e.g. 'output_img'.
+        Returns stdout as a string if Plastimatch excecutes succesfully.
+        '''
+        run_list = ['plastimatch', command]
+        stdout_str = ''
+        
+        for a in args:
+            if a != None:
+                run_list.append(str(a))
+        for k in kwargs:
+            if kwargs[k] != None:
+                option = '--' + k.replace('_','-')
+                run_list.append(option)
+                run_list.append(str(kwargs[k]))
+        
+        run = subprocess.Popen(run_list, stdout=subprocess.PIPE)
+        
+        while True:
+            output_line = run.stdout.readline().decode('utf-8')
+            if run.poll() is not None:
+                break
+            if output_line:
+                stdout_str += output_line
+                print(output_line.strip())
+        
+        if run.poll() == 0:
+            return stdout_str
+        else:
+            raise Exception('Plastimatch error')
+        
     def image_registration_global(**kwargs):
         '''
         Use to define global parameters of Plastimatch command file.
@@ -88,12 +121,7 @@ class PlastimatchInterface(object):
         supported_cls = (RTArray,)
         PlastimatchInterface.__input_check(input_file, supported_cls)
         
-        get_stats = subprocess.Popen(['plastimatch','stats',
-                                      input_file.path,
-                                      ],stdout=subprocess.PIPE)
-        get_stats.wait()
-
-        print(get_stats.stdout.read().decode('utf-8'))
+        PlastimatchInterface.run('stats', input_file.path)
         
     @staticmethod
     def get_stats(input_file):
@@ -108,12 +136,7 @@ class PlastimatchInterface(object):
         supported_cls = (PatientImage, DoseMap, Structure)
         PlastimatchInterface.__input_check(input_file, supported_cls)
         
-        get_stats = subprocess.Popen(['plastimatch','stats',
-                                      input_file.path,
-                                      ],stdout=subprocess.PIPE)
-        get_stats.wait()
-        
-        stats  = (get_stats.stdout.read()).decode('utf-8')
+        stats  = PlastimatchInterface.run('stats', input_file.path)
         stats  = stats.strip('\n')
         keys   = stats.split(' ')[::2]
         values = [float(i) for i in stats.split(' ')[1::2]]
@@ -183,15 +206,17 @@ class PlastimatchInterface(object):
         spacing_y_new = input_file.spacing_y
         spacing_z_new = input_file.spacing_z
     
-        extend_or_crop = subprocess.Popen(['plastimatch','resample',
-                                            '--input', input_file.path,
-                                            '--output', output_file_path,
-                                            '--origin', '{} {} {}'.format(origin_x_new, origin_y_new, origin_z_new),
-                                            '--dim', '{} {} {}'.format(size_x_new, size_y_new, size_z_new),
-                                            '--spacing', '{} {} {}'.format(spacing_x_new, spacing_y_new, spacing_z_new),
-                                            '--default-value', '{}'.format(default_value)
-                                            ])
-        extend_or_crop.wait()
+        origin_new = '{} {} {}'.format(origin_x_new, origin_y_new, origin_z_new)
+        size_new = '{} {} {}'.format(size_x_new, size_y_new, size_z_new)
+        spacing_new = '{} {} {}'.format(spacing_x_new, spacing_y_new, spacing_z_new)
+    
+        PlastimatchInterface.run('resample',
+                                 input = input_file.path,
+                                 output = output_file_path,
+                                 origin = origin_new,
+                                 dim = size_new,
+                                 spacing = spacing_new,
+                                 default_value = default_value)
         
         if unit == 'mm':
             print('\nExtend/crop input converted from [mm] to [vox]:'\
@@ -218,43 +243,37 @@ class PlastimatchInterface(object):
         PlastimatchInterface.__input_check(foreground, supported_cls)
         
         dirpath = os.path.dirname(foreground)
-        temp = Structure(os.path.join(dirpath, 'mask_temp.mha'))
+        temp_mask = os.path.join(dirpath, 'mask_temp.mha')
+        temp_foreground = os.path.join(dirpath, 'foreground_temp.mha')
+        temp_background = os.path.join(dirpath, 'background_temp.mha')
         
         if len(masks) == 0:
             raise Exception('Need at least one mask file.')
             
         elif len(masks) == 1:
-            shutil.copyfile(masks[0].path, temp.path)
+            shutil.copyfile(masks[0].path, temp_mask)
             
         else:
-            PlastimatchInterface.get_union(temp.path, *masks)
-            
-        mask_foreground = subprocess.Popen(['plastimatch','mask',
-                                            '--input', foreground.path,
-                                            '--mask', temp.path,
-                                            '--mask-value', '0',
-                                            '--output', 'foreground_temp.mha'
-                                            ], cwd=dirpath)
-        mask_foreground.wait()
-    
-        fill_background = subprocess.Popen(['plastimatch','fill',
-                                            '--input', background.path,
-                                            '--mask', temp.path,
-                                            '--mask-value', '0',
-                                            '--output', 'background_temp.mha'
-                                            ], cwd=dirpath)
-        fill_background.wait()
-            
-        get_final_image = subprocess.Popen(['plastimatch','add',
-                                            'foreground_temp.mha',
-                                            'background_temp.mha',
-                                            '--output', output_file_path,
-                                            ], cwd=dirpath)
-        get_final_image.wait()
+            PlastimatchInterface.get_union(temp_mask, *masks)
         
-        os.remove(os.path.join(dirpath, 'foreground_temp.mha'))
-        os.remove(os.path.join(dirpath, 'background_temp.mha'))
-        os.remove(os.path.join(dirpath, 'mask_temp.mha'))
+        PlastimatchInterface.run('mask',
+                                 input = foreground.path,
+                                 mask = temp_mask,
+                                 mask_value = 0,
+                                 output = temp_foreground)
+        
+        PlastimatchInterface.run('fill',
+                                 input = background.path,
+                                 mask = temp_mask,
+                                 mask_value = 0,
+                                 output = temp_background)
+
+        PlastimatchInterface.run('add', temp_foreground, temp_background,
+                                 output = output_file_path)
+        
+        os.remove(temp_foreground)
+        os.remove(temp_background)
+        os.remove(temp_mask)
         
         return foreground.__class__(output_file_path)
     
@@ -279,12 +298,10 @@ class PlastimatchInterface(object):
         for val in parameters:
             transform_str = transform_str + '{},'.format(val)
         
-        adjust = subprocess.Popen(['plastimatch','adjust',
-                                   '--input', input_file.path,
-                                   '--output', output_file_path,
-                                   '--pw-linear', transform_str,
-                                   ])
-        adjust.wait()
+        PlastimatchInterface.run('adjust',
+                                 input = input_file.path,
+                                 output = output_file_path,
+                                 pw_linear = transform_str)
 
         return input_file.__class__(output_file_path)
 
@@ -331,12 +348,10 @@ class PlastimatchInterface(object):
         supported_cls = (PatientImage, DoseMap)
         PlastimatchInterface.__input_check(input_file, supported_cls)
 
-        weight_image = subprocess.Popen(['plastimatch','add',
-                                         input_file.path,
-                                         '--weight', '{}'.format(weight),
-                                         '--output', output_file_path,
-                                         ])
-        weight_image.wait()
+        PlastimatchInterface.run('add',
+                                 input_file.path,
+                                 weight = weight,
+                                 output = output_file_path)
 
         return input_file.__class__(output_file_path)
 
@@ -423,12 +438,12 @@ class PlastimatchInterface(object):
             y = y * input_file.spacing_y
             z = z * input_file.spacing_z
         
-        translation_str = '"{} {} {}"'.format(x, y, z)
+        translation_str = '{} {} {}'.format(x, y, z)
         
-        create_vf = subprocess.Popen(['plastimatch synth-vf --fixed {} --xf-trans {} --output {}'
-                                      .format(temp_path, translation_str, translation_vf.path)
-                                      ], cwd = dirpath, shell=True)
-        create_vf.wait()
+        PlastimatchInterface.run('synth-vf',
+                                 fixed = temp_path,
+                                 xf_trans = translation_str,
+                                 output = translation_vf.path)
         
         PlastimatchInterface.warp_image(input_file,
                                         output_file_path,
@@ -456,7 +471,9 @@ class PlastimatchInterface(object):
               'x = {} mm | = {} voxels\n'\
               'y = {} mm | = {} voxels\n'\
               'z = {} mm | = {} voxels'\
-              .format(-x, -x/input_file.spacing_x, -y, -y/input_file.spacing_y, -z, -z/input_file.spacing_z))
+              .format(-x, -x/input_file.spacing_x,
+                      -y, -y/input_file.spacing_y,
+                      -z, -z/input_file.spacing_z))
             
         return input_file.__class__(output_file_path), translation_vf
 
@@ -502,15 +519,14 @@ class PlastimatchInterface(object):
         
         default_value = input_file.base_value if default_value == None else default_value
         
-        warp = subprocess.Popen(['plastimatch','convert',
-                                 '--input', input_file.path,
-                                 '--output-img', output_file_path,
-                                 '--xf', vf_file.path,
-                                 '--default-value', str(default_value),
-                                 # '--algorithm', 'itk',
-                                 # '--output-type','float',
-                                 ])
-        warp.wait()
+        PlastimatchInterface.run('convert',
+                                 input = input_file.path,
+                                 output_img = output_file_path,
+                                 xf = vf_file.path,
+                                 default_value = default_value,
+                                 # algorithm = 'itk',
+                                 # output_type = 'float'
+                                 )
         
         return input_file.__class__(output_file_path)
     
@@ -533,52 +549,51 @@ class PlastimatchInterface(object):
         
         mask_value = input_file.base_value if mask_value == None else mask_value
         
-        mask = subprocess.Popen(['plastimatch','mask',
-                                 '--input', input_file.path,
-                                 '--output', output_file_path,
-                                 '--mask', mask.path,
-                                 '--mask-value', str(mask_value)
-                                 ])
-        mask.wait()
+        PlastimatchInterface.run('mask',
+                                 input = input_file.path,
+                                 output = output_file_path,
+                                 mask = mask.path,
+                                 mask_value = mask_value)
         
         return input_file.__class__(output_file_path)
 
     @staticmethod
-    def convert_dicom_folder(input_dicom_folder, output_image, structures=None, dose_map=None):
+    def DICOM_to_ITK(input_dicom, output_image=None, structures=None, dose_map=None):
         '''
-        Function extracts images from dicom folder.
+        Converts DICOM to ITK.
         
         Args:
-            input_dicom_folder --> path to input dicom folder (string)
+            input_dicom --> path to input dicom folder or file (string)
             output_image --> path to output image file (string)
             structures --> path to folder for structures (string)
             dose_map --> path to output dose image file (string)
         '''
         # TODO: modify method once we have appropriate classes like e.g. Patient, StructureSet, DicomFolder etc.
-        get_image = subprocess.Popen(['plastimatch','convert',
-                                      '--input', input_dicom_folder,
-                                      '--output-type', 'float',
-                                      '--output-img', output_image,
-                                      ])
-        get_image.wait()
-            
-        if structures != None:
-            get_structures = subprocess.Popen(['plastimatch','convert',
-                                               '--input', input_dicom_folder,
-                                               '--fixed', output_image,
-                                               '--output-type', 'float',
-                                               '--output-prefix', structures,
-                                               ])
-            get_structures.wait()
-            
-        if dose_map != None:
-            get_dose_map = subprocess.Popen(['plastimatch','convert',
-                                             '--input', input_dicom_folder,
-                                             '--fixed', output_image,
-                                             '--output-type', 'float',
-                                             '--output-dose-img', dose_map,
-                                             ])
-            get_dose_map.wait()
+        
+        PlastimatchInterface.run('convert',
+                                 input = input_dicom,
+                                 output_type = 'float',
+                                 output_img = output_image,
+                                 output_prefix = structures,
+                                 output_dose_img = dose_map)
+    
+    def ITK_to_DICOM(output_dicom_folder, input_image=None, structures=None, dose_map=None):
+        '''
+        Converts ITK to DICOM.
+        
+        Args:
+            output_dicom_folder --> path to output dicom folder (string)
+            input_image --> path to input image file (string)
+            structures --> path to folder for structures (string)
+            dose_map --> path to input dose image file (string)
+        '''
+        # TODO: modify method once we have appropriate classes like e.g. Patient, StructureSet, DicomFolder etc.
+        
+        PlastimatchInterface.run('convert',
+                                 input = input_image,
+                                 input_prefix = structures,
+                                 input_dose_img = dose_map,
+                                 output_dicom = output_dicom_folder)
 
     @staticmethod
     def resample_to_reference(input_file, output_file_path, reference_image):
@@ -594,13 +609,11 @@ class PlastimatchInterface(object):
         supported_cls = (RTArray,)
         PlastimatchInterface.__input_check(input_file, supported_cls)
         PlastimatchInterface.__input_check(reference_image, supported_cls)
-    
-        resample = subprocess.Popen(['plastimatch','resample',
-                                      '--input', input_file.path,
-                                      '--output', output_file_path,
-                                      '--fixed', reference_image.path
-                                      ])
-        resample.wait()
+        
+        PlastimatchInterface.run('resample',
+                                 input = input_file.path,
+                                 output = output_file_path,
+                                 fixed = reference_image.path)
         
         return input_file.__class__(output_file_path)
 
