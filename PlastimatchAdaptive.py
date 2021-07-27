@@ -242,7 +242,7 @@ class PlastimatchAdaptive(object):
         PlastimatchAdaptive.__input_check(background, supported_cls)
         PlastimatchAdaptive.__input_check(foreground, supported_cls)
         
-        dirpath = os.path.dirname(foreground)
+        dirpath = os.path.dirname(foreground.path)
         temp_mask = os.path.join(dirpath, 'mask_temp.mha')
         temp_foreground = os.path.join(dirpath, 'foreground_temp.mha')
         temp_background = os.path.join(dirpath, 'background_temp.mha')
@@ -638,7 +638,7 @@ class PlastimatchAdaptive(object):
         supported_cls = (Structure,)
         PlastimatchAdaptive.__input_check(input_mask, supported_cls)
         
-        dirpath = os.path.dirname(input_mask)
+        dirpath = os.path.dirname(input_mask.path)
         temp = os.path.join(dirpath, 'mask_dmap_temp.mha')
         
         PlastimatchAdaptive.run('dmap',
@@ -834,6 +834,23 @@ class PlastimatchAdaptive(object):
     
         return Structure(output_mask_path)
     
+    def get_bbox(input_mask, output_mask_path, margin):
+        '''
+        Generates a bounding box around input mask.
+        Returns Structure object for output mask file.
+        
+        Args:
+            input_mask --> instance of Structure class
+            output_mask_path --> path to output mask file (string)
+            margin --> margin that is applied around the input mask (mm)
+        '''
+        PlastimatchAdaptive.run('bbox',
+                                input_mask.path,
+                                margin = margin,
+                                output = output_mask_path)
+        
+        return Structure(output_mask_path)
+    
     #%% Image registration methods
 
     @staticmethod
@@ -843,7 +860,8 @@ class PlastimatchAdaptive(object):
                                     output_vf_path=None,
                                     fixed_mask=None,
                                     moving_mask=None,
-                                    metric='mse'):
+                                    metric='mse',
+                                    reg_factor=1):
         '''
         Writes Plastimatch command file and runs deformable image registration.
         Returns appropriate objects for output image and/or output vector field.
@@ -856,6 +874,7 @@ class PlastimatchAdaptive(object):
             fixed_mask --> instance of Structure class
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
+            reg_factor --> regularization multiplier (float or int)
         '''
         PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
         PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
@@ -888,7 +907,7 @@ class PlastimatchAdaptive(object):
                                                                  max_its = 50,
                                                                  grid_spac = '100 100 100',
                                                                  res = '8 8 4',
-                                                                 regularization_lambda = 1,
+                                                                 regularization_lambda = 1*reg_factor,
                                                                  metric = metric))
                                                                   
             f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
@@ -898,7 +917,7 @@ class PlastimatchAdaptive(object):
                                                                  max_its = 50,
                                                                  grid_spac = '80 80 80',
                                                                  res = '4 4 2',
-                                                                 regularization_lambda = 0.1,
+                                                                 regularization_lambda = 0.1*reg_factor,
                                                                  metric = metric))
                     
             f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
@@ -908,7 +927,7 @@ class PlastimatchAdaptive(object):
                                                                  max_its = 40,
                                                                  grid_spac = '60 60 60',
                                                                  res = '2 2 1',
-                                                                 regularization_lambda = 0.1,
+                                                                 regularization_lambda = 0.1*reg_factor,
                                                                  metric = metric))
             
             f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
@@ -918,7 +937,7 @@ class PlastimatchAdaptive(object):
                                                                  max_its = 40,
                                                                  grid_spac = '20 20 20',
                                                                  res = '1 1 1',
-                                                                 regularization_lambda = 0.01,
+                                                                 regularization_lambda = 0.05*reg_factor,
                                                                  metric = metric))
             
             f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
@@ -928,7 +947,7 @@ class PlastimatchAdaptive(object):
                                                                  max_its = 40,
                                                                  grid_spac = '10 10 10',
                                                                  res = '1 1 1',
-                                                                 regularization_lambda = 0.01,
+                                                                 regularization_lambda = 0.01*reg_factor,
                                                                  metric = metric))
         
         PlastimatchAdaptive.run(command_file_path)
@@ -1097,7 +1116,11 @@ class PlastimatchAdaptive(object):
             return RigidVF(output_vf_path)
         
     @staticmethod
-    def match_position_3_DOF(fixed_image, moving_image, output_image_path, output_vf_path, metric='mse'):
+    def match_position_3_DOF(fixed_image,
+                             moving_image,
+                             output_image_path,
+                             output_vf_path,
+                             metric='mse'):
         '''
         Matches patient position with a 3-DOF vector field.
         Retains original image dimensions/size/spacing.
@@ -1114,7 +1137,7 @@ class PlastimatchAdaptive(object):
         PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
         
         dirpath = os.path.dirname(output_vf_path)
-        vf_temp_path = os.path.join(dirpath, 'vt_temp.mha')
+        vf_temp_path = os.path.join(dirpath, 'vf_temp.mha')
         
         vf_temp = PlastimatchAdaptive.register_3_DOF(fixed_image,
                                                      moving_image,
@@ -1159,8 +1182,9 @@ class PlastimatchAdaptive(object):
                            output_contours,
                            fixed_image,
                            moving_image,
+                           fixed_mask=None,
                            moving_mask=None,
-                           apply_fixed_box=False,
+                           reg_factor = 1,
                            translate_first=True):
         '''
         Propagates contours from one image to another.
@@ -1170,8 +1194,8 @@ class PlastimatchAdaptive(object):
             output_contours --> path to folder to store deformed structures (string)
             fixed_image --> instance of PatientImage class
             moving_image --> instance of PatientImage class
-            moving_mask --> instance of Structure class for moving mask
-            apply_fixed_box --> option to use box as fixed mask (bool)
+            fixed_mask --> instance of Structure class
+            moving_mask --> instance of Structure class
             translate_first --> option to match images in 3D before running DIR (bool)
         '''
         PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
@@ -1192,34 +1216,27 @@ class PlastimatchAdaptive(object):
             img, vf = PlastimatchAdaptive.match_position_3_DOF(fixed_image,
                                                                moving_image,
                                                                translated_img_path,
-                                                               translation_vf_path)
+                                                               translation_vf_path,)
+                                                               # metric='mi')
             
             PlastimatchAdaptive.apply_vf_to_contours(input_contours, temp_contours_path, vf)
                 
             input_contours = temp_contours_path
             moving_image = img
         
-        if apply_fixed_box is True:
-            box_temp_path = os.path.join(output_contours, 'box_temp.mha')
-            box_temp = PlastimatchAdaptive.get_empty_mask(moving_image, box_temp_path, values='ones')
-            fixed_mask = PlastimatchAdaptive.resample_to_reference(box_temp, box_temp.path, fixed_image)
-        else:
-            fixed_mask = None
-        
         _, vf = PlastimatchAdaptive.register_deformable_bspline(fixed_image,
                                                                 moving_image,
                                                                 deformed_img_path,
                                                                 deformation_vf_path,
                                                                 fixed_mask,
-                                                                moving_mask)
+                                                                moving_mask,
+                                                                reg_factor = reg_factor)
         
         PlastimatchAdaptive.apply_vf_to_contours(input_contours, output_contours, vf)
-        
-        if apply_fixed_box is True:
-            os.remove(fixed_mask.path)
             
         if translate_first is True:
             shutil.rmtree(temp_contours_path)
             
         print('\nContour propagation: DONE.')
-        
+
+
