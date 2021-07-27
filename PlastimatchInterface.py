@@ -445,9 +445,14 @@ class PlastimatchInterface(object):
                                  xf_trans = translation_str,
                                  output = translation_vf.path)
         
-        PlastimatchInterface.warp_image(input_file,
-                                        output_file_path,
-                                        translation_vf)
+        if input_file.__class__ is Structure:            
+            PlastimatchInterface.warp_mask(input_file,
+                                           output_file_path,
+                                           translation_vf)
+        else:
+            PlastimatchInterface.warp_image(input_file,
+                                            output_file_path,
+                                            translation_vf)
         
         os.remove(temp_path)
     
@@ -634,22 +639,19 @@ class PlastimatchInterface(object):
         PlastimatchInterface.__input_check(input_mask, supported_cls)
         
         dirpath = os.path.dirname(input_mask)
+        temp = os.path.join(dirpath, 'mask_dmap_temp.mha')
         
-        get_dmap = subprocess.Popen(['plastimatch','dmap',
-                                     '--input', input_mask.path,
-                                     # '--algorithm', 'maurer',
-                                     '--output', 'mask_dmap_temp.mha',
-                                     ], cwd = dirpath)
-        get_dmap.wait()
-                                 
-        threshold_mask = subprocess.Popen(['plastimatch','threshold',
-                                           '--input', 'mask_dmap_temp.mha',
-                                           '--output', output_mask_path,
-                                           '--below', '{}'.format(distance)
-                                           ], cwd = dirpath)  
-        threshold_mask.wait()
+        PlastimatchInterface.run('dmap',
+                                 input = input_mask.path,
+                                 # algorithm = 'maurer',
+                                 output = temp)
         
-        os.remove(os.path.join(dirpath, 'mask_dmap_temp.mha'))
+        PlastimatchInterface.run('threshold',
+                                 input = temp,
+                                 output = output_mask_path,
+                                 below = distance)
+        
+        os.remove(temp)
         
         return Structure(output_mask_path)
 
@@ -666,12 +668,10 @@ class PlastimatchInterface(object):
         supported_cls = (Structure,)
         PlastimatchInterface.__input_check(input_mask, supported_cls)
         
-        threshold = subprocess.Popen(['plastimatch','threshold',
-                                      '--input', input_mask.path,
-                                      '--output', output_mask_path,
-                                      '--below', '0.5'
-                                      ])
-        threshold.wait()
+        PlastimatchInterface.run('threshold',
+                                 input = input_mask.path,
+                                 output = output_mask_path,
+                                 below = 0.5)
         
         return Structure(output_mask_path)
 
@@ -690,27 +690,21 @@ class PlastimatchInterface(object):
         supported_cls = (Structure,)
         PlastimatchInterface.__input_check(input_mask, supported_cls)
         PlastimatchInterface.__input_check(vf_file, (VectorField,))
-    
-        convert_mask = subprocess.Popen(['plastimatch','convert',
-                                         '--input', input_mask.path,
-                                         '--output-img', output_mask_path,
-                                         '--output-type', 'float'
-                                         ])
-        convert_mask.wait()
         
-        warp_mask = subprocess.Popen(['plastimatch','convert',
-                                      '--input', output_mask_path,
-                                      '--output-img', output_mask_path,
-                                      '--xf', vf_file.path
-                                      ])
-        warp_mask.wait()
+        PlastimatchInterface.run('convert',
+                                 input = input_mask.path,
+                                 output_img = output_mask_path,
+                                 output_type = 'float')
         
-        threshold = subprocess.Popen(['plastimatch','threshold',
-                                      '--input', output_mask_path,
-                                      '--output', output_mask_path,
-                                      '--above', '0.5'
-                                      ])
-        threshold.wait()
+        PlastimatchInterface.run('convert',
+                                 input = output_mask_path,
+                                 output_img = output_mask_path,
+                                 xf = vf_file.path)
+        
+        PlastimatchInterface.run('threshold',
+                                 input = output_mask_path,
+                                 output = output_mask_path,
+                                 above = 0.5)
         
         return Structure(output_mask_path)
 
@@ -734,13 +728,11 @@ class PlastimatchInterface(object):
         shutil.copyfile(masks[0].path, output_mask_path)
         
         for mask in masks[1:]:
-        
-            union = subprocess.Popen(['plastimatch', 'union',
-                                      output_mask_path,
-                                      mask.path,
-                                      '--output', output_mask_path,
-                                      ])
-            union.wait()
+            
+            PlastimatchInterface.run('union',
+                                     output_mask_path,
+                                     mask.path,
+                                     output = output_mask_path)
             
         return Structure(output_mask_path)
 
@@ -764,21 +756,17 @@ class PlastimatchInterface(object):
         shutil.copyfile(masks[0].path, output_mask_path)
         
         for mask in masks[1:]:
-        
-            add_masks = subprocess.Popen(['plastimatch', 'add',
-                                          output_mask_path,
-                                          mask.path,
-                                          '--output', output_mask_path,
-                                          ])
-            add_masks.wait()
+            
+            PlastimatchInterface.run('add',
+                                     output_mask_path,
+                                     mask.path,
+                                     output = output_mask_path)
     
-        threshold = subprocess.Popen(['plastimatch','threshold',
-                                      '--input', output_mask_path,
-                                      '--output', output_mask_path,
-                                      '--above', str(len(masks))
-                                      ])
-        threshold.wait()
-        
+        PlastimatchInterface.run('threshold',
+                                 input = output_mask_path,
+                                 output = output_mask_path,
+                                 above = len(masks))
+    
         return Structure(output_mask_path)
 
     @staticmethod
@@ -804,20 +792,16 @@ class PlastimatchInterface(object):
         shutil.copyfile(input_mask.path, output_mask_path)
         
         for mask in excluded_masks:
+
+            PlastimatchInterface.run('diff',
+                                     output_mask_path,
+                                     mask.path,
+                                     output_mask_path)
         
-            subtract = subprocess.Popen(['plastimatch','diff',
-                                         '{}'.format(output_mask_path),
-                                         '{}'.format(mask.path),
-                                         output_mask_path
-                                         ])  
-            subtract.wait()
-        
-        convert = subprocess.Popen(['plastimatch','convert',
-                                    '--input', output_mask_path,
-                                    '--output-type', 'uchar',
-                                    '--output-img', output_mask_path,
-                                    ])
-        convert.wait()
+        PlastimatchInterface.run('convert',
+                                 input = output_mask_path,
+                                 output_type = 'uchar',
+                                 output_img = output_mask_path)
         
         return Structure(output_mask_path)
     
@@ -842,13 +826,11 @@ class PlastimatchInterface(object):
         
         elif values == 'ones':
             threshold_value = stats['MAX'] + 1
-    
-        threshold = subprocess.Popen(['plastimatch','threshold',
-                                      '--input', reference_image.path,
-                                      '--output', output_mask_path,
-                                      '--below', str(threshold_value),
-                                      ])
-        threshold.wait()
+        
+        PlastimatchInterface.run('threshold',
+                                 input = reference_image.path,
+                                 output = output_mask_path,
+                                 below = threshold_value)
     
         return Structure(output_mask_path)
     
@@ -949,8 +931,7 @@ class PlastimatchInterface(object):
                                                                   regularization_lambda = 0.01,
                                                                   metric = metric))
         
-        DIR = subprocess.Popen(['plastimatch', command_file_path], cwd = dirpath)
-        DIR.wait()
+        PlastimatchInterface.run(command_file_path)
         
         if output_image_path != None and output_vf_path != None:
             return moving_image.__class__(output_image_path), BSplineVF(output_vf_path)
@@ -1027,8 +1008,7 @@ class PlastimatchInterface(object):
                                                                   res = '2 2 1',
                                                                   metric = metric))
         
-        register_3_DOF = subprocess.Popen(['plastimatch', command_file_path], cwd = dirpath)
-        register_3_DOF.wait()
+        PlastimatchInterface.run(command_file_path)
         
         if output_image_path != None and output_vf_path != None:
             return moving_image.__class__(output_image_path), TranslationVF(output_vf_path)
@@ -1105,8 +1085,7 @@ class PlastimatchInterface(object):
                                                                   res = '2 2 1',
                                                                   metric = metric))
         
-        register_6_DOF = subprocess.Popen(['plastimatch', command_file_path], cwd = dirpath)
-        register_6_DOF.wait()
+        PlastimatchInterface.run(command_file_path)
         
         if output_image_path != None and output_vf_path != None:
             return moving_image.__class__(output_image_path), RigidVF(output_vf_path)
@@ -1156,54 +1135,91 @@ class PlastimatchInterface(object):
         return moving_image.__class__(output_image_path), TranslationVF(output_vf_path)
     
     @staticmethod
+    def apply_vf_to_contours(input_contours,
+                             output_contours,
+                             vf_file):
+        '''
+        Applies input vector field to all contours in folder.
+        
+        Args:
+            input_contours --> path to folder containing input structure files (string)
+            output_contours --> path to folder to store deformed structures (string)
+            vf_file --> instance of VectorField class
+        '''
+        PlastimatchInterface.__input_check(vf_file, (VectorField,))
+        
+        for filename in os.listdir(input_contours):
+            if os.path.isfile(os.path.join(input_contours, filename)):
+                PlastimatchInterface.warp_mask(Structure(os.path.join(input_contours, filename)), 
+                                               os.path.join(output_contours, filename),
+                                               vf_file)
+    
+    @staticmethod
     def propagate_contours(input_contours,
                            output_contours,
                            fixed_image,
                            moving_image,
-                           output_image_path,
-                           output_vf_path,
                            moving_mask=None,
-                           apply_fixed_box=False):
+                           apply_fixed_box=False,
+                           match_images=True):
         '''
         Propagates contours from one image to another.
-        Assumes both images are matched in 3D (translation or rigid).
-        Returns appropriate objects for output image and vector field.
         
         Args:
             input_contours --> path to folder containing input structure files (string)
             output_contours --> path to folder to store deformed structures (string)
             fixed_image --> instance of PatientImage class
             moving_image --> instance of PatientImage class
-            output_image_path --> path to output image file (string)
-            output_vf_path --> path to output vector field file (string)
             moving_mask --> instance of Structure class for moving mask
             apply_fixed_box --> option to use box as fixed mask (bool)
+            match_images --> option to match images in 3D before running DIR (bool)
         '''
         PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
         PlastimatchInterface.__input_check(moving_image, (PatientImage,))
         
-        if apply_fixed_box == True:
+        dirpath = os.path.dirname(moving_image.path)
+        var = os.path.splitext(moving_image.path)
+        
+        deformed_img_path = var[0] + '_deformed' + var[1]
+        deformation_vf_path = os.path.join(dirpath, 'vf_dir.mha')
+        
+        if match_images is True:
+            
+            translated_img_path = var[0] + '_translated' + var[1]
+            translation_vf_path = os.path.join(dirpath, 'vf_3_DOF.mha')
+            temp_contours_path = os.path.join(dirpath, 'temp_contours')
+            
+            img, vf = PlastimatchInterface.match_position_3_DOF(fixed_image,
+                                                                moving_image,
+                                                                translated_img_path,
+                                                                translation_vf_path)
+            
+            PlastimatchInterface.apply_vf_to_contours(input_contours, temp_contours_path, vf)
+                
+            input_contours = temp_contours_path
+            moving_image = img
+        
+        if apply_fixed_box is True:
             box_temp_path = os.path.join(output_contours, 'box_temp.mha')
             box_temp = PlastimatchInterface.get_empty_mask(moving_image, box_temp_path, values='ones')
             fixed_mask = PlastimatchInterface.resample_to_reference(box_temp, box_temp.path, fixed_image)
         else:
             fixed_mask = None
         
-        img, vf = PlastimatchInterface.register_deformable_bspline(fixed_image,
-                                                                   moving_image,
-                                                                   output_image_path,
-                                                                   output_vf_path,
-                                                                   fixed_mask,
-                                                                   moving_mask)
+        _, vf = PlastimatchInterface.register_deformable_bspline(fixed_image,
+                                                                 moving_image,
+                                                                 deformed_img_path,
+                                                                 deformation_vf_path,
+                                                                 fixed_mask,
+                                                                 moving_mask)
         
-        if apply_fixed_box == True:
+        PlastimatchInterface.apply_vf_to_contours(input_contours, output_contours, vf)
+        
+        if apply_fixed_box is True:
             os.remove(fixed_mask.path)
+            
+        if match_images is True:
+            shutil.rmtree(temp_contours_path)
+            
+        print('\nContour propagation: DONE.')
         
-        for filename in os.listdir(input_contours):
-            if os.path.isfile(os.path.join(input_contours, filename)):
-                PlastimatchInterface.warp_mask(Structure(os.path.join(input_contours, filename)), 
-                                               os.path.join(output_contours, filename), vf)
-
-        return img, vf
-    
-
