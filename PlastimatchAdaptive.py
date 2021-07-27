@@ -13,7 +13,7 @@ from RTArray import RTArray, PatientImage, ImageCT, ImageCBCT, ImageMRI, DoseMap
 
 # from RTArray import *
 
-class PlastimatchInterface(object):
+class PlastimatchAdaptive(object):
     
     def __init__(self):
         pass
@@ -119,9 +119,9 @@ class PlastimatchInterface(object):
             input_file --> instance of RTArray class
         '''
         supported_cls = (RTArray,)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
         
-        PlastimatchInterface.run('stats', input_file.path)
+        PlastimatchAdaptive.run('stats', input_file.path)
         
     @staticmethod
     def get_stats(input_file):
@@ -134,9 +134,9 @@ class PlastimatchInterface(object):
         #TODO: Make it work for VectorField
 
         supported_cls = (PatientImage, DoseMap, Structure)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
         
-        stats  = PlastimatchInterface.run('stats', input_file.path)
+        stats  = PlastimatchAdaptive.run('stats', input_file.path)
         stats  = stats.strip('\n')
         keys   = stats.split(' ')[::2]
         values = [float(i) for i in stats.split(' ')[1::2]]
@@ -170,7 +170,7 @@ class PlastimatchInterface(object):
                           --> will be applied according to class if not specified
         '''
         supported_cls = (RTArray,)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
         
         input_file.load_header()
 
@@ -210,13 +210,13 @@ class PlastimatchInterface(object):
         size_new = '{} {} {}'.format(size_x_new, size_y_new, size_z_new)
         spacing_new = '{} {} {}'.format(spacing_x_new, spacing_y_new, spacing_z_new)
     
-        PlastimatchInterface.run('resample',
-                                 input = input_file.path,
-                                 output = output_file_path,
-                                 origin = origin_new,
-                                 dim = size_new,
-                                 spacing = spacing_new,
-                                 default_value = default_value)
+        PlastimatchAdaptive.run('resample',
+                                input = input_file.path,
+                                output = output_file_path,
+                                origin = origin_new,
+                                dim = size_new,
+                                spacing = spacing_new,
+                                default_value = default_value)
         
         if unit == 'mm':
             print('\nExtend/crop input converted from [mm] to [vox]:'\
@@ -239,8 +239,8 @@ class PlastimatchInterface(object):
             masks --> instances of Structure class for masks
         '''
         supported_cls = (RTArray,)
-        PlastimatchInterface.__input_check(background, supported_cls)
-        PlastimatchInterface.__input_check(foreground, supported_cls)
+        PlastimatchAdaptive.__input_check(background, supported_cls)
+        PlastimatchAdaptive.__input_check(foreground, supported_cls)
         
         dirpath = os.path.dirname(foreground)
         temp_mask = os.path.join(dirpath, 'mask_temp.mha')
@@ -254,22 +254,22 @@ class PlastimatchInterface(object):
             shutil.copyfile(masks[0].path, temp_mask)
             
         else:
-            PlastimatchInterface.get_union(temp_mask, *masks)
+            PlastimatchAdaptive.get_union(temp_mask, *masks)
         
-        PlastimatchInterface.run('mask',
-                                 input = foreground.path,
-                                 mask = temp_mask,
-                                 mask_value = 0,
-                                 output = temp_foreground)
+        PlastimatchAdaptive.run('mask',
+                                input = foreground.path,
+                                mask = temp_mask,
+                                mask_value = 0,
+                                output = temp_foreground)
         
-        PlastimatchInterface.run('fill',
-                                 input = background.path,
-                                 mask = temp_mask,
-                                 mask_value = 0,
-                                 output = temp_background)
+        PlastimatchAdaptive.run('fill',
+                                input = background.path,
+                                mask = temp_mask,
+                                mask_value = 0,
+                                output = temp_background)
 
-        PlastimatchInterface.run('add', temp_foreground, temp_background,
-                                 output = output_file_path)
+        PlastimatchAdaptive.run('add', temp_foreground, temp_background,
+                                output = output_file_path)
         
         os.remove(temp_foreground)
         os.remove(temp_background)
@@ -291,17 +291,17 @@ class PlastimatchInterface(object):
         # Example values used before: "-1024,-1024,261,58" (261 from CBCT, 58 from CT)
         
         supported_cls = (PatientImage, DoseMap)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
         
         transform_str = ''
         
         for val in parameters:
             transform_str = transform_str + '{},'.format(val)
         
-        PlastimatchInterface.run('adjust',
-                                 input = input_file.path,
-                                 output = output_file_path,
-                                 pw_linear = transform_str)
+        PlastimatchAdaptive.run('adjust',
+                                input = input_file.path,
+                                output = output_file_path,
+                                pw_linear = transform_str)
 
         return input_file.__class__(output_file_path)
 
@@ -318,9 +318,9 @@ class PlastimatchInterface(object):
             factor --> multiplication factor (float or int)
         '''     
         supported_cls = (PatientImage, DoseMap)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
 
-        stats = PlastimatchInterface.get_stats(input_file) 
+        stats = PlastimatchAdaptive.get_stats(input_file) 
         
         min_value = int(stats['MIN'])
         max_value = int(stats['MAX']+1)
@@ -329,7 +329,7 @@ class PlastimatchInterface(object):
         values_mod =   [i*factor for i in values_ini]
         values_input = [j for k in zip(values_ini, values_mod) for j in k]
         
-        PlastimatchInterface.scale_image_linear(input_file, output_file_path, *values_input)
+        PlastimatchAdaptive.scale_image_linear(input_file, output_file_path, *values_input)
 
         return input_file.__class__(output_file_path)
     
@@ -346,12 +346,12 @@ class PlastimatchInterface(object):
             weight --> multiplication weight (float or int)
         '''     
         supported_cls = (PatientImage, DoseMap)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
 
-        PlastimatchInterface.run('add',
-                                 input_file.path,
-                                 weight = weight,
-                                 output = output_file_path)
+        PlastimatchAdaptive.run('add',
+                                input_file.path,
+                                weight = weight,
+                                output = output_file_path)
 
         return input_file.__class__(output_file_path)
 
@@ -377,7 +377,7 @@ class PlastimatchInterface(object):
             discrete_voxels --> option to apply shift in discrete number of voxels (bool)
         '''
         supported_cls = (RTArray,)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
         
         dirpath = os.path.dirname(input_file.path)
         temp_path = os.path.join(dirpath, 'ext_temp.mha')
@@ -427,12 +427,12 @@ class PlastimatchInterface(object):
         elif z < 0:
             z_upper = abs(z)
         
-        PlastimatchInterface.extend_or_crop(input_file,
-                                            temp_path,
-                                            x_lower, x_upper,
-                                            y_lower, y_upper,
-                                            z_lower, z_upper,
-                                            unit)
+        PlastimatchAdaptive.extend_or_crop(input_file,
+                                           temp_path,
+                                           x_lower, x_upper,
+                                           y_lower, y_upper,
+                                           z_lower, z_upper,
+                                           unit)
         if unit == 'vox':
             x = x * input_file.spacing_x
             y = y * input_file.spacing_y
@@ -440,37 +440,37 @@ class PlastimatchInterface(object):
         
         translation_str = '{} {} {}'.format(x, y, z)
         
-        PlastimatchInterface.run('synth-vf',
-                                 fixed = temp_path,
-                                 xf_trans = translation_str,
-                                 output = translation_vf.path)
+        PlastimatchAdaptive.run('synth-vf',
+                                fixed = temp_path,
+                                xf_trans = translation_str,
+                                output = translation_vf.path)
         
         if input_file.__class__ is Structure:            
-            PlastimatchInterface.warp_mask(input_file,
+            PlastimatchAdaptive.warp_mask(input_file,
+                                          output_file_path,
+                                          translation_vf)
+        else:
+            PlastimatchAdaptive.warp_image(input_file,
                                            output_file_path,
                                            translation_vf)
-        else:
-            PlastimatchInterface.warp_image(input_file,
-                                            output_file_path,
-                                            translation_vf)
         
         os.remove(temp_path)
     
         if frame == 'shift':
-            PlastimatchInterface.extend_or_crop(input_file.__class__(output_file_path),
-                                                output_file_path,
-                                                -x_upper, -x_lower,
-                                                -y_upper, -y_lower,
-                                                -z_upper, -z_lower,
-                                                unit)
+            PlastimatchAdaptive.extend_or_crop(input_file.__class__(output_file_path),
+                                               output_file_path,
+                                               -x_upper, -x_lower,
+                                               -y_upper, -y_lower,
+                                               -z_upper, -z_lower,
+                                               unit)
         
         elif frame == 'fix':
-            PlastimatchInterface.extend_or_crop(input_file.__class__(output_file_path),
-                                                output_file_path,
-                                                -x_lower, -x_upper,
-                                                -y_lower, -y_upper,
-                                                -z_lower, -z_upper,
-                                                unit)
+            PlastimatchAdaptive.extend_or_crop(input_file.__class__(output_file_path),
+                                               output_file_path,
+                                               -x_lower, -x_upper,
+                                               -y_lower, -y_upper,
+                                               -z_lower, -z_upper,
+                                               unit)
         
         print('\nApplied translation:\n'\
               'x = {} mm | = {} voxels\n'\
@@ -491,7 +491,7 @@ class PlastimatchInterface(object):
             vf_file --> instance of TranslationVF class
         '''
         supported_cls = (TranslationVF,)
-        PlastimatchInterface.__input_check(vf_file, supported_cls)
+        PlastimatchAdaptive.__input_check(vf_file, supported_cls)
         
         vf_file.load_file()
         
@@ -519,19 +519,19 @@ class PlastimatchInterface(object):
                           --> will be applied according to class if not specified
         '''
         supported_cls = (PatientImage, DoseMap, VectorField)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
-        PlastimatchInterface.__input_check(vf_file, (VectorField,))
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(vf_file, (VectorField,))
         
         default_value = input_file.base_value if default_value == None else default_value
         
-        PlastimatchInterface.run('convert',
-                                 input = input_file.path,
-                                 output_img = output_file_path,
-                                 xf = vf_file.path,
-                                 default_value = default_value,
-                                 # algorithm = 'itk',
-                                 # output_type = 'float'
-                                 )
+        PlastimatchAdaptive.run('convert',
+                                input = input_file.path,
+                                output_img = output_file_path,
+                                xf = vf_file.path,
+                                default_value = default_value,
+                                # algorithm = 'itk',
+                                # output_type = 'float'
+                                )
         
         return input_file.__class__(output_file_path)
     
@@ -549,16 +549,16 @@ class PlastimatchInterface(object):
                        --> will be applied according to class if not specified
         '''
         supported_cls = (PatientImage, DoseMap, VectorField)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
-        PlastimatchInterface.__input_check(mask, (Structure,))
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(mask, (Structure,))
         
         mask_value = input_file.base_value if mask_value == None else mask_value
         
-        PlastimatchInterface.run('mask',
-                                 input = input_file.path,
-                                 output = output_file_path,
-                                 mask = mask.path,
-                                 mask_value = mask_value)
+        PlastimatchAdaptive.run('mask',
+                                input = input_file.path,
+                                output = output_file_path,
+                                mask = mask.path,
+                                mask_value = mask_value)
         
         return input_file.__class__(output_file_path)
 
@@ -575,12 +575,12 @@ class PlastimatchInterface(object):
         '''
         # TODO: modify method once we have appropriate classes like e.g. Patient, StructureSet, DicomFolder etc.
         
-        PlastimatchInterface.run('convert',
-                                 input = input_dicom,
-                                 output_type = 'float',
-                                 output_img = output_image,
-                                 output_prefix = structures,
-                                 output_dose_img = dose_map)
+        PlastimatchAdaptive.run('convert',
+                                input = input_dicom,
+                                output_type = 'float',
+                                output_img = output_image,
+                                output_prefix = structures,
+                                output_dose_img = dose_map)
     
     def ITK_to_DICOM(output_dicom_folder, input_image=None, structures=None, dose_map=None):
         '''
@@ -594,11 +594,11 @@ class PlastimatchInterface(object):
         '''
         # TODO: modify method once we have appropriate classes like e.g. Patient, StructureSet, DicomFolder etc.
         
-        PlastimatchInterface.run('convert',
-                                 input = input_image,
-                                 input_prefix = structures,
-                                 input_dose_img = dose_map,
-                                 output_dicom = output_dicom_folder)
+        PlastimatchAdaptive.run('convert',
+                                input = input_image,
+                                input_prefix = structures,
+                                input_dose_img = dose_map,
+                                output_dicom = output_dicom_folder)
 
     @staticmethod
     def resample_to_reference(input_file, output_file_path, reference_image):
@@ -612,13 +612,13 @@ class PlastimatchInterface(object):
             reference_image --> instance of RTArray class
         '''
         supported_cls = (RTArray,)
-        PlastimatchInterface.__input_check(input_file, supported_cls)
-        PlastimatchInterface.__input_check(reference_image, supported_cls)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(reference_image, supported_cls)
         
-        PlastimatchInterface.run('resample',
-                                 input = input_file.path,
-                                 output = output_file_path,
-                                 fixed = reference_image.path)
+        PlastimatchAdaptive.run('resample',
+                                input = input_file.path,
+                                output = output_file_path,
+                                fixed = reference_image.path)
         
         return input_file.__class__(output_file_path)
 
@@ -636,20 +636,20 @@ class PlastimatchInterface(object):
             distance --> expansion in mm (int or float)
         '''
         supported_cls = (Structure,)
-        PlastimatchInterface.__input_check(input_mask, supported_cls)
+        PlastimatchAdaptive.__input_check(input_mask, supported_cls)
         
         dirpath = os.path.dirname(input_mask)
         temp = os.path.join(dirpath, 'mask_dmap_temp.mha')
         
-        PlastimatchInterface.run('dmap',
-                                 input = input_mask.path,
-                                 # algorithm = 'maurer',
-                                 output = temp)
+        PlastimatchAdaptive.run('dmap',
+                                input = input_mask.path,
+                                # algorithm = 'maurer',
+                                output = temp)
         
-        PlastimatchInterface.run('threshold',
-                                 input = temp,
-                                 output = output_mask_path,
-                                 below = distance)
+        PlastimatchAdaptive.run('threshold',
+                                input = temp,
+                                output = output_mask_path,
+                                below = distance)
         
         os.remove(temp)
         
@@ -666,12 +666,12 @@ class PlastimatchInterface(object):
             output_mask_path --> path to output mask file (string)
         '''
         supported_cls = (Structure,)
-        PlastimatchInterface.__input_check(input_mask, supported_cls)
+        PlastimatchAdaptive.__input_check(input_mask, supported_cls)
         
-        PlastimatchInterface.run('threshold',
-                                 input = input_mask.path,
-                                 output = output_mask_path,
-                                 below = 0.5)
+        PlastimatchAdaptive.run('threshold',
+                                input = input_mask.path,
+                                output = output_mask_path,
+                                below = 0.5)
         
         return Structure(output_mask_path)
 
@@ -688,23 +688,23 @@ class PlastimatchInterface(object):
             vf_file --> instance of VectorField class
         '''
         supported_cls = (Structure,)
-        PlastimatchInterface.__input_check(input_mask, supported_cls)
-        PlastimatchInterface.__input_check(vf_file, (VectorField,))
+        PlastimatchAdaptive.__input_check(input_mask, supported_cls)
+        PlastimatchAdaptive.__input_check(vf_file, (VectorField,))
         
-        PlastimatchInterface.run('convert',
-                                 input = input_mask.path,
-                                 output_img = output_mask_path,
-                                 output_type = 'float')
+        PlastimatchAdaptive.run('convert',
+                                input = input_mask.path,
+                                output_img = output_mask_path,
+                                output_type = 'float')
         
-        PlastimatchInterface.run('convert',
-                                 input = output_mask_path,
-                                 output_img = output_mask_path,
-                                 xf = vf_file.path)
+        PlastimatchAdaptive.run('convert',
+                                input = output_mask_path,
+                                output_img = output_mask_path,
+                                xf = vf_file.path)
         
-        PlastimatchInterface.run('threshold',
-                                 input = output_mask_path,
-                                 output = output_mask_path,
-                                 above = 0.5)
+        PlastimatchAdaptive.run('threshold',
+                                input = output_mask_path,
+                                output = output_mask_path,
+                                above = 0.5)
         
         return Structure(output_mask_path)
 
@@ -723,16 +723,16 @@ class PlastimatchInterface(object):
         if len(masks) < 2:
             raise Exception('Need at least two mask files.')
             
-        all(PlastimatchInterface.__input_check(mask, supported_cls) for mask in masks)
+        all(PlastimatchAdaptive.__input_check(mask, supported_cls) for mask in masks)
         
         shutil.copyfile(masks[0].path, output_mask_path)
         
         for mask in masks[1:]:
             
-            PlastimatchInterface.run('union',
-                                     output_mask_path,
-                                     mask.path,
-                                     output = output_mask_path)
+            PlastimatchAdaptive.run('union',
+                                    output_mask_path,
+                                    mask.path,
+                                    output = output_mask_path)
             
         return Structure(output_mask_path)
 
@@ -751,21 +751,21 @@ class PlastimatchInterface(object):
         if len(masks) < 2:
             raise Exception('Need at least two mask files.')
             
-        all(PlastimatchInterface.__input_check(mask, supported_cls) for mask in masks)
+        all(PlastimatchAdaptive.__input_check(mask, supported_cls) for mask in masks)
         
         shutil.copyfile(masks[0].path, output_mask_path)
         
         for mask in masks[1:]:
             
-            PlastimatchInterface.run('add',
-                                     output_mask_path,
-                                     mask.path,
-                                     output = output_mask_path)
+            PlastimatchAdaptive.run('add',
+                                    output_mask_path,
+                                    mask.path,
+                                    output = output_mask_path)
     
-        PlastimatchInterface.run('threshold',
-                                 input = output_mask_path,
-                                 output = output_mask_path,
-                                 above = len(masks))
+        PlastimatchAdaptive.run('threshold',
+                                input = output_mask_path,
+                                output = output_mask_path,
+                                above = len(masks))
     
         return Structure(output_mask_path)
 
@@ -782,26 +782,26 @@ class PlastimatchInterface(object):
         '''
         # TODO: Check if function works well.
         supported_cls = (Structure,)
-        PlastimatchInterface.__input_check(input_mask, supported_cls)
+        PlastimatchAdaptive.__input_check(input_mask, supported_cls)
         
         if len(excluded_masks) < 1:
             raise Exception('Need at least one mask file to exclude.')
             
-        all(PlastimatchInterface.__input_check(mask, supported_cls) for mask in excluded_masks)
+        all(PlastimatchAdaptive.__input_check(mask, supported_cls) for mask in excluded_masks)
         
         shutil.copyfile(input_mask.path, output_mask_path)
         
         for mask in excluded_masks:
 
-            PlastimatchInterface.run('diff',
-                                     output_mask_path,
-                                     mask.path,
-                                     output_mask_path)
+            PlastimatchAdaptive.run('diff',
+                                    output_mask_path,
+                                    mask.path,
+                                    output_mask_path)
         
-        PlastimatchInterface.run('convert',
-                                 input = output_mask_path,
-                                 output_type = 'uchar',
-                                 output_img = output_mask_path)
+        PlastimatchAdaptive.run('convert',
+                                input = output_mask_path,
+                                output_type = 'uchar',
+                                output_img = output_mask_path)
         
         return Structure(output_mask_path)
     
@@ -817,9 +817,9 @@ class PlastimatchInterface(object):
             values --> values of output mask, 'zeros' or 'ones' (string)
         '''
         supported_cls = (RTArray,)
-        PlastimatchInterface.__input_check(reference_image, supported_cls)
+        PlastimatchAdaptive.__input_check(reference_image, supported_cls)
     
-        stats = PlastimatchInterface.get_stats(reference_image)
+        stats = PlastimatchAdaptive.get_stats(reference_image)
         
         if values == 'zeros':
             threshold_value = stats['MIN'] - 1
@@ -827,10 +827,10 @@ class PlastimatchInterface(object):
         elif values == 'ones':
             threshold_value = stats['MAX'] + 1
         
-        PlastimatchInterface.run('threshold',
-                                 input = reference_image.path,
-                                 output = output_mask_path,
-                                 below = threshold_value)
+        PlastimatchAdaptive.run('threshold',
+                                input = reference_image.path,
+                                output = output_mask_path,
+                                below = threshold_value)
     
         return Structure(output_mask_path)
     
@@ -857,13 +857,13 @@ class PlastimatchInterface(object):
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
-        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
         
         if fixed_mask != None:
-            PlastimatchInterface.__input_check(fixed_mask, (Structure,))
+            PlastimatchAdaptive.__input_check(fixed_mask, (Structure,))
         if moving_mask != None:
-            PlastimatchInterface.__input_check(moving_mask, (Structure,))
+            PlastimatchAdaptive.__input_check(moving_mask, (Structure,))
             
         fixed_mask_path  = fixed_mask.path  if fixed_mask  != None else None
         moving_mask_path = moving_mask.path if moving_mask != None else None
@@ -873,65 +873,65 @@ class PlastimatchInterface(object):
     
         with open(command_file_path, 'w') as f:
             
-            f.write(PlastimatchInterface.image_registration_global(fixed = fixed_image.path,
-                                                                   moving = moving_image.path,
-                                                                   img_out = output_image_path,
-                                                                   vf_out = output_vf_path,
-                                                                   fixed_mask = fixed_mask_path,
-                                                                   moving_mask = moving_mask_path,
-                                                                   default_value = moving_image.base_value))
+            f.write(PlastimatchAdaptive.image_registration_global(fixed = fixed_image.path,
+                                                                  moving = moving_image.path,
+                                                                  img_out = output_image_path,
+                                                                  vf_out = output_vf_path,
+                                                                  fixed_mask = fixed_mask_path,
+                                                                  moving_mask = moving_mask_path,
+                                                                  default_value = moving_image.base_value))
             
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
-                                                                  optim = 'lbfgsb',
-                                                                  impl = 'plastimatch',
-                                                                  threading = 'cuda',
-                                                                  max_its = 50,
-                                                                  grid_spac = '100 100 100',
-                                                                  res = '8 8 4',
-                                                                  regularization_lambda = 1,
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
+                                                                 optim = 'lbfgsb',
+                                                                 impl = 'plastimatch',
+                                                                 threading = 'cuda',
+                                                                 max_its = 50,
+                                                                 grid_spac = '100 100 100',
+                                                                 res = '8 8 4',
+                                                                 regularization_lambda = 1,
+                                                                 metric = metric))
                                                                   
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
-                                                                  optim = 'lbfgsb',
-                                                                  impl = 'plastimatch',
-                                                                  threading = 'cuda',
-                                                                  max_its = 50,
-                                                                  grid_spac = '80 80 80',
-                                                                  res = '4 4 2',
-                                                                  regularization_lambda = 0.1,
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
+                                                                 optim = 'lbfgsb',
+                                                                 impl = 'plastimatch',
+                                                                 threading = 'cuda',
+                                                                 max_its = 50,
+                                                                 grid_spac = '80 80 80',
+                                                                 res = '4 4 2',
+                                                                 regularization_lambda = 0.1,
+                                                                 metric = metric))
                     
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
-                                                                  optim = 'lbfgsb',
-                                                                  impl = 'plastimatch',
-                                                                  threading = 'cuda',
-                                                                  max_its = 40,
-                                                                  grid_spac = '60 60 60',
-                                                                  res = '2 2 1',
-                                                                  regularization_lambda = 0.1,
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
+                                                                 optim = 'lbfgsb',
+                                                                 impl = 'plastimatch',
+                                                                 threading = 'cuda',
+                                                                 max_its = 40,
+                                                                 grid_spac = '60 60 60',
+                                                                 res = '2 2 1',
+                                                                 regularization_lambda = 0.1,
+                                                                 metric = metric))
             
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
-                                                                  optim = 'lbfgsb',
-                                                                  impl = 'plastimatch',
-                                                                  threading = 'cuda',
-                                                                  max_its = 40,
-                                                                  grid_spac = '20 20 20',
-                                                                  res = '1 1 1',
-                                                                  regularization_lambda = 0.01,
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
+                                                                 optim = 'lbfgsb',
+                                                                 impl = 'plastimatch',
+                                                                 threading = 'cuda',
+                                                                 max_its = 40,
+                                                                 grid_spac = '20 20 20',
+                                                                 res = '1 1 1',
+                                                                 regularization_lambda = 0.01,
+                                                                 metric = metric))
             
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'bspline',
-                                                                  optim = 'lbfgsb',
-                                                                  impl = 'plastimatch',
-                                                                  threading = 'cuda',
-                                                                  max_its = 40,
-                                                                  grid_spac = '10 10 10',
-                                                                  res = '1 1 1',
-                                                                  regularization_lambda = 0.01,
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'bspline',
+                                                                 optim = 'lbfgsb',
+                                                                 impl = 'plastimatch',
+                                                                 threading = 'cuda',
+                                                                 max_its = 40,
+                                                                 grid_spac = '10 10 10',
+                                                                 res = '1 1 1',
+                                                                 regularization_lambda = 0.01,
+                                                                 metric = metric))
         
-        PlastimatchInterface.run(command_file_path)
+        PlastimatchAdaptive.run(command_file_path)
         
         if output_image_path != None and output_vf_path != None:
             return moving_image.__class__(output_image_path), BSplineVF(output_vf_path)
@@ -963,13 +963,13 @@ class PlastimatchInterface(object):
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
-        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
         
         if fixed_mask != None:
-            PlastimatchInterface.__input_check(fixed_mask, (Structure,))
+            PlastimatchAdaptive.__input_check(fixed_mask, (Structure,))
         if moving_mask != None:
-            PlastimatchInterface.__input_check(moving_mask, (Structure,))
+            PlastimatchAdaptive.__input_check(moving_mask, (Structure,))
             
         fixed_mask_path  = fixed_mask.path  if fixed_mask  != None else None
         moving_mask_path = moving_mask.path if moving_mask != None else None
@@ -979,36 +979,36 @@ class PlastimatchInterface(object):
     
         with open(command_file_path, 'w') as f:
             
-            f.write(PlastimatchInterface.image_registration_global(fixed = fixed_image.path,
-                                                                   moving = moving_image.path,
-                                                                   img_out = output_image_path,
-                                                                   vf_out = output_vf_path,
-                                                                   fixed_mask = fixed_mask_path,
-                                                                   moving_mask = moving_mask_path,
-                                                                   default_value = moving_image.base_value))
+            f.write(PlastimatchAdaptive.image_registration_global(fixed = fixed_image.path,
+                                                                  moving = moving_image.path,
+                                                                  img_out = output_image_path,
+                                                                  vf_out = output_vf_path,
+                                                                  fixed_mask = fixed_mask_path,
+                                                                  moving_mask = moving_mask_path,
+                                                                  default_value = moving_image.base_value))
             
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'translation',
-                                                                  optim = 'rsg',
-                                                                  threading = 'cuda',
-                                                                  max_its = 200,
-                                                                  res = '8 8 4',
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'translation',
+                                                                 optim = 'rsg',
+                                                                 threading = 'cuda',
+                                                                 max_its = 200,
+                                                                 res = '8 8 4',
+                                                                 metric = metric))
                                                                   
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'translation',
-                                                                  optim = 'rsg',
-                                                                  threading = 'cuda',
-                                                                  max_its = 200,
-                                                                  res = '4 4 2',
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'translation',
+                                                                 optim = 'rsg',
+                                                                 threading = 'cuda',
+                                                                 max_its = 200,
+                                                                 res = '4 4 2',
+                                                                 metric = metric))
                     
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'translation',
-                                                                  optim = 'rsg',
-                                                                  threading = 'cuda',
-                                                                  max_its = 200,
-                                                                  res = '2 2 1',
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'translation',
+                                                                 optim = 'rsg',
+                                                                 threading = 'cuda',
+                                                                 max_its = 200,
+                                                                 res = '2 2 1',
+                                                                 metric = metric))
         
-        PlastimatchInterface.run(command_file_path)
+        PlastimatchAdaptive.run(command_file_path)
         
         if output_image_path != None and output_vf_path != None:
             return moving_image.__class__(output_image_path), TranslationVF(output_vf_path)
@@ -1040,13 +1040,13 @@ class PlastimatchInterface(object):
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
-        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
         
         if fixed_mask != None:
-            PlastimatchInterface.__input_check(fixed_mask, (Structure,))
+            PlastimatchAdaptive.__input_check(fixed_mask, (Structure,))
         if moving_mask != None:
-            PlastimatchInterface.__input_check(moving_mask, (Structure,))
+            PlastimatchAdaptive.__input_check(moving_mask, (Structure,))
             
         fixed_mask_path  = fixed_mask.path  if fixed_mask  != None else None
         moving_mask_path = moving_mask.path if moving_mask != None else None
@@ -1056,36 +1056,36 @@ class PlastimatchInterface(object):
     
         with open(command_file_path, 'w') as f:
             
-            f.write(PlastimatchInterface.image_registration_global(fixed = fixed_image.path,
-                                                                   moving = moving_image.path,
-                                                                   img_out = output_image_path,
-                                                                   vf_out = output_vf_path,
-                                                                   fixed_mask = fixed_mask_path,
-                                                                   moving_mask = moving_mask_path,
-                                                                   default_value = moving_image.base_value))
+            f.write(PlastimatchAdaptive.image_registration_global(fixed = fixed_image.path,
+                                                                  moving = moving_image.path,
+                                                                  img_out = output_image_path,
+                                                                  vf_out = output_vf_path,
+                                                                  fixed_mask = fixed_mask_path,
+                                                                  moving_mask = moving_mask_path,
+                                                                  default_value = moving_image.base_value))
             
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'rigid',
-                                                                  optim = 'versor',
-                                                                  threading = 'cuda',
-                                                                  max_its = 200,
-                                                                  res = '8 8 4',
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'rigid',
+                                                                 optim = 'versor',
+                                                                 threading = 'cuda',
+                                                                 max_its = 200,
+                                                                 res = '8 8 4',
+                                                                 metric = metric))
                                                                   
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'rigid',
-                                                                  optim = 'versor',
-                                                                  threading = 'cuda',
-                                                                  max_its = 200,
-                                                                  res = '4 4 2',
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'rigid',
+                                                                 optim = 'versor',
+                                                                 threading = 'cuda',
+                                                                 max_its = 200,
+                                                                 res = '4 4 2',
+                                                                 metric = metric))
                     
-            f.write(PlastimatchInterface.image_registration_stage(xform = 'rigid',
-                                                                  optim = 'versor',
-                                                                  threading = 'cuda',
-                                                                  max_its = 200,
-                                                                  res = '2 2 1',
-                                                                  metric = metric))
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'rigid',
+                                                                 optim = 'versor',
+                                                                 threading = 'cuda',
+                                                                 max_its = 200,
+                                                                 res = '2 2 1',
+                                                                 metric = metric))
         
-        PlastimatchInterface.run(command_file_path)
+        PlastimatchAdaptive.run(command_file_path)
         
         if output_image_path != None and output_vf_path != None:
             return moving_image.__class__(output_image_path), RigidVF(output_vf_path)
@@ -1110,27 +1110,27 @@ class PlastimatchInterface(object):
             output_vf_path --> path to output vector field file (string)
             metric --> cost function metric to optimize (string)
         '''
-        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
-        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
         
         dirpath = os.path.dirname(output_vf_path)
         vf_temp_path = os.path.join(dirpath, 'vt_temp.mha')
         
-        vf_temp = PlastimatchInterface.register_3_DOF(fixed_image,
-                                                      moving_image,
-                                                      output_vf_path = vf_temp_path,
-                                                      metric = metric)
+        vf_temp = PlastimatchAdaptive.register_3_DOF(fixed_image,
+                                                     moving_image,
+                                                     output_vf_path = vf_temp_path,
+                                                     metric = metric)
         
-        x,y,z = PlastimatchInterface.get_translation_vf_shifts(vf_temp)
+        x,y,z = PlastimatchAdaptive.get_translation_vf_shifts(vf_temp)
         os.remove(vf_temp.path)
         
-        PlastimatchInterface.apply_manual_translation(moving_image,
-                                                      output_image_path,
-                                                      output_vf_path,
-                                                      -x, -y, -z,
-                                                      unit = 'mm',
-                                                      frame = 'shift',
-                                                      discrete_voxels = True)
+        PlastimatchAdaptive.apply_manual_translation(moving_image,
+                                                     output_image_path,
+                                                     output_vf_path,
+                                                     -x, -y, -z,
+                                                     unit = 'mm',
+                                                     frame = 'shift',
+                                                     discrete_voxels = True)
         
         return moving_image.__class__(output_image_path), TranslationVF(output_vf_path)
     
@@ -1146,13 +1146,13 @@ class PlastimatchInterface(object):
             output_contours --> path to folder to store deformed structures (string)
             vf_file --> instance of VectorField class
         '''
-        PlastimatchInterface.__input_check(vf_file, (VectorField,))
+        PlastimatchAdaptive.__input_check(vf_file, (VectorField,))
         
         for filename in os.listdir(input_contours):
             if os.path.isfile(os.path.join(input_contours, filename)):
-                PlastimatchInterface.warp_mask(Structure(os.path.join(input_contours, filename)), 
-                                               os.path.join(output_contours, filename),
-                                               vf_file)
+                PlastimatchAdaptive.warp_mask(Structure(os.path.join(input_contours, filename)), 
+                                              os.path.join(output_contours, filename),
+                                              vf_file)
     
     @staticmethod
     def propagate_contours(input_contours,
@@ -1161,7 +1161,7 @@ class PlastimatchInterface(object):
                            moving_image,
                            moving_mask=None,
                            apply_fixed_box=False,
-                           match_images=True):
+                           translate_first=True):
         '''
         Propagates contours from one image to another.
         
@@ -1172,10 +1172,10 @@ class PlastimatchInterface(object):
             moving_image --> instance of PatientImage class
             moving_mask --> instance of Structure class for moving mask
             apply_fixed_box --> option to use box as fixed mask (bool)
-            match_images --> option to match images in 3D before running DIR (bool)
+            translate_first --> option to match images in 3D before running DIR (bool)
         '''
-        PlastimatchInterface.__input_check(fixed_image, (PatientImage,))
-        PlastimatchInterface.__input_check(moving_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
+        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
         
         dirpath = os.path.dirname(moving_image.path)
         var = os.path.splitext(moving_image.path)
@@ -1183,42 +1183,42 @@ class PlastimatchInterface(object):
         deformed_img_path = var[0] + '_deformed' + var[1]
         deformation_vf_path = os.path.join(dirpath, 'vf_dir.mha')
         
-        if match_images is True:
+        if translate_first is True:
             
             translated_img_path = var[0] + '_translated' + var[1]
             translation_vf_path = os.path.join(dirpath, 'vf_3_DOF.mha')
             temp_contours_path = os.path.join(dirpath, 'temp_contours')
             
-            img, vf = PlastimatchInterface.match_position_3_DOF(fixed_image,
-                                                                moving_image,
-                                                                translated_img_path,
-                                                                translation_vf_path)
+            img, vf = PlastimatchAdaptive.match_position_3_DOF(fixed_image,
+                                                               moving_image,
+                                                               translated_img_path,
+                                                               translation_vf_path)
             
-            PlastimatchInterface.apply_vf_to_contours(input_contours, temp_contours_path, vf)
+            PlastimatchAdaptive.apply_vf_to_contours(input_contours, temp_contours_path, vf)
                 
             input_contours = temp_contours_path
             moving_image = img
         
         if apply_fixed_box is True:
             box_temp_path = os.path.join(output_contours, 'box_temp.mha')
-            box_temp = PlastimatchInterface.get_empty_mask(moving_image, box_temp_path, values='ones')
-            fixed_mask = PlastimatchInterface.resample_to_reference(box_temp, box_temp.path, fixed_image)
+            box_temp = PlastimatchAdaptive.get_empty_mask(moving_image, box_temp_path, values='ones')
+            fixed_mask = PlastimatchAdaptive.resample_to_reference(box_temp, box_temp.path, fixed_image)
         else:
             fixed_mask = None
         
-        _, vf = PlastimatchInterface.register_deformable_bspline(fixed_image,
-                                                                 moving_image,
-                                                                 deformed_img_path,
-                                                                 deformation_vf_path,
-                                                                 fixed_mask,
-                                                                 moving_mask)
+        _, vf = PlastimatchAdaptive.register_deformable_bspline(fixed_image,
+                                                                moving_image,
+                                                                deformed_img_path,
+                                                                deformation_vf_path,
+                                                                fixed_mask,
+                                                                moving_mask)
         
-        PlastimatchInterface.apply_vf_to_contours(input_contours, output_contours, vf)
+        PlastimatchAdaptive.apply_vf_to_contours(input_contours, output_contours, vf)
         
         if apply_fixed_box is True:
             os.remove(fixed_mask.path)
             
-        if match_images is True:
+        if translate_first is True:
             shutil.rmtree(temp_contours_path)
             
         print('\nContour propagation: DONE.')
