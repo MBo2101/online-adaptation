@@ -108,7 +108,7 @@ class PlastimatchAdaptive(object):
                 command_file_string = command_file_string + '\n{}={}'.format(k, kwargs[k])
         return command_file_string + '\n'
     
-    # Static methods
+    #%% General methods
     
     @staticmethod
     def print_stats(input_file):
@@ -848,6 +848,34 @@ class PlastimatchAdaptive(object):
                                 input_mask.path,
                                 margin = margin,
                                 output = output_mask_path)
+        
+        return Structure(output_mask_path)
+    
+    def get_shell(input_mask, output_mask_path, distance):
+        '''
+        Generates a shell around input mask.
+        Returns Structure object for output mask file.
+        
+        Args:
+            input_mask --> instance of Structure class
+            output_mask_path --> path to output mask file (string)
+            distance --> expansion in mm (int or float)
+        '''
+        dirpath = os.path.dirname(input_mask.path)
+        temp = os.path.join(dirpath, 'mask_dmap_temp.mha')
+        
+        range_str = '{},{}'.format(0.001, distance)
+        
+        PlastimatchAdaptive.run('dmap',
+                                input = input_mask.path,
+                                output = temp)
+        
+        PlastimatchAdaptive.run('threshold',
+                                input = temp,
+                                output = output_mask_path,
+                                range = range_str)
+        
+        os.remove(temp)
         
         return Structure(output_mask_path)
     
