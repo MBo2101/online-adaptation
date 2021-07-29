@@ -545,7 +545,7 @@ class PlastimatchAdaptive(object):
             input_file --> instance of RTArray class (except Structure)
             output_file_path --> path to output file (string)
             mask --> instance of Structure class
-            mask_value --> numeric value that is applied to the background (float)
+            mask_value --> numeric value that is applied outside the mask volume (float)
                        --> will be applied according to class if not specified
         '''
         supported_cls = (PatientImage, DoseMap, VectorField)
@@ -555,6 +555,33 @@ class PlastimatchAdaptive(object):
         mask_value = input_file.base_value if mask_value == None else mask_value
         
         PlastimatchAdaptive.run('mask',
+                                input = input_file.path,
+                                output = output_file_path,
+                                mask = mask.path,
+                                mask_value = mask_value)
+        
+        return input_file.__class__(output_file_path)
+
+    @staticmethod
+    def fill_image(input_file, output_file_path, mask, mask_value=None):
+        '''
+        Fills image using an input mask.
+        Returns RTArray object for the output file (same class as input_file).
+        
+        Args:
+            input_file --> instance of RTArray class (except Structure)
+            output_file_path --> path to output file (string)
+            mask --> instance of Structure class
+            mask_value --> numeric value that is applied inside the mask volume (float)
+                       --> will be applied according to class if not specified
+        '''
+        supported_cls = (PatientImage, DoseMap, VectorField)
+        PlastimatchAdaptive.__input_check(input_file, supported_cls)
+        PlastimatchAdaptive.__input_check(mask, (Structure,))
+        
+        mask_value = input_file.base_value if mask_value == None else mask_value
+        
+        PlastimatchAdaptive.run('fill',
                                 input = input_file.path,
                                 output = output_file_path,
                                 mask = mask.path,
@@ -844,6 +871,9 @@ class PlastimatchAdaptive(object):
             output_mask_path --> path to output mask file (string)
             margin --> margin that is applied around the input mask (mm)
         '''
+        supported_cls = (Structure,)
+        PlastimatchAdaptive.__input_check(input_mask, supported_cls)
+        
         PlastimatchAdaptive.run('bbox',
                                 input_mask.path,
                                 margin = margin,
@@ -854,6 +884,7 @@ class PlastimatchAdaptive(object):
     def get_shell(input_mask, output_mask_path, distance):
         '''
         Generates a shell around input mask.
+        Convention: (+) for outer shell, (-) for inner shell.
         Returns Structure object for output mask file.
         
         Args:
@@ -861,10 +892,14 @@ class PlastimatchAdaptive(object):
             output_mask_path --> path to output mask file (string)
             distance --> expansion in mm (int or float)
         '''
+        supported_cls = (Structure,)
+        PlastimatchAdaptive.__input_check(input_mask, supported_cls)
+        
         dirpath = os.path.dirname(input_mask.path)
         temp = os.path.join(dirpath, 'mask_dmap_temp.mha')
         
-        range_str = '{},{}'.format(0.001, distance)
+        edge = 0.001
+        range_str = '{},{}'.format(edge, distance) if distance > 0 else '{},{}'.format(distance, edge)
         
         PlastimatchAdaptive.run('dmap',
                                 input = input_mask.path,
@@ -880,6 +915,39 @@ class PlastimatchAdaptive(object):
         return Structure(output_mask_path)
     
     #%% Image registration methods
+
+    @staticmethod
+    def mask_to_img(input_mask, output_file_path, background=0, foreground=1):
+        '''
+        Converts binary mask file to synthetic image file.
+        Output file can be used for image registration.
+        Returns PatientImage object for output file.
+        
+        input_mask --> instance of Structure class
+        output_file_path --> path to output image file (string)
+        background --> background value assigned to output image (int or float)
+        foreground --> foreground value assigned to output image (int or float)
+        '''
+        supported_cls = (Structure,)
+        PlastimatchAdaptive.__input_check(input_mask, supported_cls)
+        
+        dirpath = os.path.dirname(input_mask.path)
+        temp = os.path.join(dirpath, 'temp.mha')
+        
+        PlastimatchAdaptive.run('synth',
+                                background = background,
+                                fixed = input_mask.path,
+                                output = temp)
+        
+        PlastimatchAdaptive.run('fill',
+                                input = temp,
+                                mask = input_mask.path,
+                                mask_value = foreground,
+                                output = output_file_path)
+        
+        os.remove(temp)
+        
+        return ImageCT(output_file_path)
 
     @staticmethod
     def register_deformable_bspline(fixed_image,
@@ -904,8 +972,9 @@ class PlastimatchAdaptive(object):
             metric --> cost function metric to optimize (string)
             reg_factor --> regularization multiplier (float or int)
         '''
-        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
-        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
+        supported_cls = (PatientImage, Structure)
+        PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
+        PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
         if fixed_mask != None:
             PlastimatchAdaptive.__input_check(fixed_mask, (Structure,))
@@ -917,6 +986,16 @@ class PlastimatchAdaptive(object):
 
         dirpath = os.path.dirname(moving_image.path)
         command_file_path = os.path.join(dirpath, 'register_bspline_command_file.txt')
+        
+        if fixed_image.__class__ is Structure and moving_image.__class__ is Structure:
+            
+            fixed_image = PlastimatchAdaptive.mask_to_img(fixed_image,
+                                                          os.path.join(dirpath, 'fixed_temp.mha'),
+                                                          0, 10000)
+            
+            moving_image = PlastimatchAdaptive.mask_to_img(moving_image,
+                                                           os.path.join(dirpath, 'moving_temp.mha'),
+                                                           0, 10000)
     
         with open(command_file_path, 'w') as f:
             
@@ -1010,8 +1089,9 @@ class PlastimatchAdaptive(object):
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
-        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
+        supported_cls = (PatientImage, Structure)
+        PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
+        PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
         if fixed_mask != None:
             PlastimatchAdaptive.__input_check(fixed_mask, (Structure,))
@@ -1023,7 +1103,17 @@ class PlastimatchAdaptive(object):
 
         dirpath = os.path.dirname(moving_image.path)
         command_file_path = os.path.join(dirpath, 'register_3_DOF_command_file.txt')
-    
+
+        if fixed_image.__class__ is Structure and moving_image.__class__ is Structure:
+            
+            fixed_image = PlastimatchAdaptive.mask_to_img(fixed_image,
+                                                          os.path.join(dirpath, 'fixed_temp.mha'),
+                                                          0, 10000)
+            
+            moving_image = PlastimatchAdaptive.mask_to_img(moving_image,
+                                                           os.path.join(dirpath, 'moving_temp.mha'),
+                                                           0, 10000)
+
         with open(command_file_path, 'w') as f:
             
             f.write(PlastimatchAdaptive.image_registration_global(fixed = fixed_image.path,
@@ -1087,8 +1177,9 @@ class PlastimatchAdaptive(object):
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
-        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
+        supported_cls = (PatientImage, Structure)
+        PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
+        PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
         if fixed_mask != None:
             PlastimatchAdaptive.__input_check(fixed_mask, (Structure,))
@@ -1100,7 +1191,17 @@ class PlastimatchAdaptive(object):
 
         dirpath = os.path.dirname(moving_image.path)
         command_file_path = os.path.join(dirpath, 'register_6_DOF_command_file.txt')
-    
+
+        if fixed_image.__class__ is Structure and moving_image.__class__ is Structure:
+            
+            fixed_image = PlastimatchAdaptive.mask_to_img(fixed_image,
+                                                          os.path.join(dirpath, 'fixed_temp.mha'),
+                                                          0, 10000)
+            
+            moving_image = PlastimatchAdaptive.mask_to_img(moving_image,
+                                                           os.path.join(dirpath, 'moving_temp.mha'),
+                                                           0, 10000)
+
         with open(command_file_path, 'w') as f:
             
             f.write(PlastimatchAdaptive.image_registration_global(fixed = fixed_image.path,
@@ -1161,8 +1262,9 @@ class PlastimatchAdaptive(object):
             output_vf_path --> path to output vector field file (string)
             metric --> cost function metric to optimize (string)
         '''
-        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
-        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
+        supported_cls = (PatientImage, Structure)
+        PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
+        PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
         dirpath = os.path.dirname(output_vf_path)
         vf_temp_path = os.path.join(dirpath, 'vf_temp.mha')
@@ -1226,8 +1328,9 @@ class PlastimatchAdaptive(object):
             moving_mask --> instance of Structure class
             translate_first --> option to match images in 3D before running DIR (bool)
         '''
-        PlastimatchAdaptive.__input_check(fixed_image, (PatientImage,))
-        PlastimatchAdaptive.__input_check(moving_image, (PatientImage,))
+        supported_cls = (PatientImage, Structure)
+        PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
+        PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
         dirpath = os.path.dirname(moving_image.path)
         var = os.path.splitext(moving_image.path)
