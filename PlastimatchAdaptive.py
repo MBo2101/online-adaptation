@@ -893,7 +893,7 @@ class PlastimatchAdaptive(object):
         Args:
             input_mask --> instance of Structure class
             output_mask_path --> path to output mask file (string)
-            distance --> expansion in mm (int or float)
+            distance --> expansion in mm (int or float) or range if passing two values (list or tuple)
         '''
         supported_cls = (Structure,)
         PlastimatchAdaptive.__input_check(input_mask, supported_cls)
@@ -901,8 +901,12 @@ class PlastimatchAdaptive(object):
         dirpath = os.path.dirname(input_mask.path)
         temp = os.path.join(dirpath, 'mask_dmap_temp.mha')
         
-        edge = 0.001
-        range_str = '{},{}'.format(edge, distance) if distance > 0 else '{},{}'.format(distance, edge)
+        if type(distance) is list or type(distance) is tuple:
+            range_str = '{},{}'.format(distance[0], distance[1])
+            
+        elif type(distance) is int or type(distance) is float:
+            edge = 0.001
+            range_str = '{},{}'.format(edge, distance) if distance > 0 else '{},{}'.format(distance, edge)
         
         PlastimatchAdaptive.run('dmap',
                                 input = input_mask.path,
@@ -1171,6 +1175,8 @@ class PlastimatchAdaptive(object):
                                                                   fixed_mask = fixed_mask_path,
                                                                   moving_mask = moving_mask_path,
                                                                   default_value = moving_image.base_value))
+            
+            f.write(PlastimatchAdaptive.image_registration_stage(xform = 'align_center'))
             
             f.write(PlastimatchAdaptive.image_registration_stage(xform = 'translation',
                                                                  optim = 'rsg',
