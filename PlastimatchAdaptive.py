@@ -752,6 +752,9 @@ class PlastimatchAdaptive(object):
             
         all(PlastimatchAdaptive.__input_check(mask, supported_cls) for mask in masks)
         
+        if os.path.exists(output_mask_path):
+            os.remove(output_mask_path)
+        
         shutil.copyfile(masks[0].path, output_mask_path)
         
         for mask in masks[1:]:
@@ -944,15 +947,15 @@ class PlastimatchAdaptive(object):
                                 fixed = input_mask.path,
                                 output = temp)
         
-        if mode is 'mask':
+        if mode == 'mask':
             PlastimatchAdaptive.run('fill',
                                     input = temp,
                                     mask = input_mask.path,
                                     mask_value = foreground,
                                     output = output_file_path)
-        elif mode is 'shell_outer':
+        elif mode == 'shell_outer':
             temp_shell = os.path.join(dirpath, 'temp_shell.mha')
-            shell = PlastimatchAdaptive.get_shell(input_mask, temp_shell, 5)
+            shell = PlastimatchAdaptive.get_shell(input_mask, temp_shell, 10)
             
             PlastimatchAdaptive.run('fill',
                                     input = temp,
@@ -961,9 +964,9 @@ class PlastimatchAdaptive(object):
                                     output = output_file_path)
             os.remove(temp_shell)
             
-        elif mode is 'shell_inner':
+        elif mode == 'shell_inner':
             temp_shell = os.path.join(dirpath, 'temp_shell.mha')
-            shell = PlastimatchAdaptive.get_shell(input_mask, temp_shell, -5)
+            shell = PlastimatchAdaptive.get_shell(input_mask, temp_shell, -10)
             
             PlastimatchAdaptive.run('fill',
                                     input = temp,
@@ -972,12 +975,12 @@ class PlastimatchAdaptive(object):
                                     output = output_file_path)
             os.remove(temp_shell)
             
-        elif mode is 'shell_centered':
+        elif mode == 'shell_uniform':
             temp_shell_1 = os.path.join(dirpath, 'temp_shell_1.mha')
             temp_shell_2 = os.path.join(dirpath, 'temp_shell_2.mha')
             temp_shell   = os.path.join(dirpath, 'temp_shell.mha')
-            shell_1 = PlastimatchAdaptive.get_shell(input_mask, temp_shell, 3)
-            shell_2 = PlastimatchAdaptive.get_shell(input_mask, temp_shell, -3)
+            shell_1 = PlastimatchAdaptive.get_shell(input_mask, temp_shell_1, 5)
+            shell_2 = PlastimatchAdaptive.get_shell(input_mask, temp_shell_2, -5)
             shell   = PlastimatchAdaptive.get_union(temp_shell, shell_1, shell_2)
             
             PlastimatchAdaptive.run('fill',
@@ -989,12 +992,12 @@ class PlastimatchAdaptive(object):
             os.remove(temp_shell_2)
             os.remove(temp_shell)
 
-        elif mode is 'shell_nonuniform':
+        elif mode == 'shell_nonuniform':
             temp_shell_1 = os.path.join(dirpath, 'temp_shell_1.mha')
             temp_shell_2 = os.path.join(dirpath, 'temp_shell_2.mha')
             temp_shell   = os.path.join(dirpath, 'temp_shell.mha')
-            shell_1 = PlastimatchAdaptive.get_shell(input_mask, temp_shell, 3)
-            shell_2 = PlastimatchAdaptive.get_shell(input_mask, temp_shell, -3)
+            shell_1 = PlastimatchAdaptive.get_shell(input_mask, temp_shell_1, 5)
+            shell_2 = PlastimatchAdaptive.get_shell(input_mask, temp_shell_2, -5)
             
             PlastimatchAdaptive.run('fill',
                                     input = temp,
@@ -1037,7 +1040,7 @@ class PlastimatchAdaptive(object):
             metric --> cost function metric to optimize (string)
             reg_factor --> regularization multiplier (float or int)
         '''
-        supported_cls = (PatientImage)
+        supported_cls = (PatientImage,)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
@@ -1144,7 +1147,7 @@ class PlastimatchAdaptive(object):
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        supported_cls = (PatientImage)
+        supported_cls = (PatientImage,)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
@@ -1222,7 +1225,7 @@ class PlastimatchAdaptive(object):
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        supported_cls = (PatientImage)
+        supported_cls = (PatientImage,)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
