@@ -8,10 +8,12 @@ Created on Wed Jul 14 10:28:25 2021
 import os
 import shutil
 import subprocess
-# from pympler import asizeof
-from RTArray import RTArray, PatientImage, ImageCT, ImageCBCT, ImageMRI, DoseMap, Structure, VectorField, TranslationVF, RigidVF, BSplineVF 
+# from RTArrays import *
+from RTArrays import RTArray, Image, ImageCT, ImageCBCT, ImageMRI, DoseMap, Structure, VectorField, TranslationVF, RigidVF, BSplineVF
 
-# from RTArray import *
+'''
+Plastimatch extension to support the adaptive proton therapy project.
+'''
 
 class PlastimatchAdaptive(object):
     
@@ -133,7 +135,7 @@ class PlastimatchAdaptive(object):
         '''
         #TODO: Make it work for VectorField
 
-        supported_cls = (PatientImage, DoseMap, Structure)
+        supported_cls = (Image, DoseMap, Structure)
         PlastimatchAdaptive.__input_check(input_file, supported_cls)
         
         stats  = PlastimatchAdaptive.run('stats', input_file.path)
@@ -284,13 +286,13 @@ class PlastimatchAdaptive(object):
         Returns RTArray object for the output file (same class as input_file).
         
         Args:
-            input_file --> instance of PatientImage or DoseMap
+            input_file --> instance of Image or DoseMap
             output_file_path --> path to output file (string)
             parameters --> pair-wise values for linear function (int or float)
         '''      
         # Example values used before: "-1024,-1024,261,58" (261 from CBCT, 58 from CT)
         
-        supported_cls = (PatientImage, DoseMap)
+        supported_cls = (Image, DoseMap)
         PlastimatchAdaptive.__input_check(input_file, supported_cls)
         
         transform_str = ''
@@ -313,11 +315,11 @@ class PlastimatchAdaptive(object):
         Returns RTArray object for the output file (same class as input_file).
         
         Args:
-            input_file --> instance of PatientImage or DoseMap
+            input_file --> instance of Image or DoseMap
             output_file_path --> path to output file (string)
             factor --> multiplication factor (float or int)
         '''     
-        supported_cls = (PatientImage, DoseMap)
+        supported_cls = (Image, DoseMap)
         PlastimatchAdaptive.__input_check(input_file, supported_cls)
 
         stats = PlastimatchAdaptive.get_stats(input_file) 
@@ -341,11 +343,11 @@ class PlastimatchAdaptive(object):
         Returns RTArray object for the output file (same class as input_file).
         
         Args:
-            input_file --> instance of PatientImage or DoseMap
+            input_file --> instance of Image or DoseMap
             output_file_path --> path to output file (string)
             weight --> multiplication weight (float or int)
         '''     
-        supported_cls = (PatientImage, DoseMap)
+        supported_cls = (Image, DoseMap)
         PlastimatchAdaptive.__input_check(input_file, supported_cls)
 
         PlastimatchAdaptive.run('add',
@@ -518,7 +520,7 @@ class PlastimatchAdaptive(object):
             default_value --> numeric value that is applied to the background (float)
                           --> will be applied according to class if not specified
         '''
-        supported_cls = (PatientImage, DoseMap, VectorField)
+        supported_cls = (Image, DoseMap, VectorField)
         PlastimatchAdaptive.__input_check(input_file, supported_cls)
         PlastimatchAdaptive.__input_check(vf_file, (VectorField,))
         
@@ -548,7 +550,7 @@ class PlastimatchAdaptive(object):
             mask_value --> numeric value that is applied outside the mask volume (float)
                        --> will be applied according to class if not specified
         '''
-        supported_cls = (PatientImage, DoseMap, VectorField)
+        supported_cls = (Image, DoseMap, VectorField)
         PlastimatchAdaptive.__input_check(input_file, supported_cls)
         PlastimatchAdaptive.__input_check(mask, (Structure,))
         
@@ -575,7 +577,7 @@ class PlastimatchAdaptive(object):
             mask_value --> numeric value that is applied inside the mask volume (float)
                        --> will be applied according to class if not specified
         '''
-        supported_cls = (PatientImage, DoseMap, VectorField)
+        supported_cls = (Image, DoseMap, VectorField)
         PlastimatchAdaptive.__input_check(input_file, supported_cls)
         PlastimatchAdaptive.__input_check(mask, (Structure,))
         
@@ -1035,8 +1037,8 @@ class PlastimatchAdaptive(object):
         Returns appropriate objects for output image and/or output vector field.
         
         Args:
-            fixed_image --> instance of PatientImage class
-            moving_image --> instance of PatientImage class
+            fixed_image --> instance of Image class
+            moving_image --> instance of Image class
             output_image_path --> path to output image file (string)
             output_vf_path --> path to output vector field file (string)
             fixed_mask --> instance of Structure class
@@ -1044,7 +1046,7 @@ class PlastimatchAdaptive(object):
             metric --> cost function metric to optimize (string)
             reg_factor --> regularization multiplier (float or int)
         '''
-        supported_cls = (PatientImage,)
+        supported_cls = (Image,)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
@@ -1143,15 +1145,15 @@ class PlastimatchAdaptive(object):
         Returns appropriate objects for output image and/or output vector field.
         
         Args:
-            fixed_image --> instance of PatientImage class
-            moving_image --> instance of PatientImage class
+            fixed_image --> instance of Image class
+            moving_image --> instance of Image class
             output_image_path --> path to output image file (string)
             output_vf_path --> path to output vector field file (string)
             fixed_mask --> instance of Structure class
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        supported_cls = (PatientImage,)
+        supported_cls = (Image,)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
@@ -1223,15 +1225,15 @@ class PlastimatchAdaptive(object):
         Returns appropriate objects for output image and/or output vector field.
         
         Args:
-            fixed_image --> instance of PatientImage class
-            moving_image --> instance of PatientImage class
+            fixed_image --> instance of Image class
+            moving_image --> instance of Image class
             output_image_path --> path to output image file (string)
             output_vf_path --> path to output vector field file (string)
             fixed_mask --> instance of Structure class
             moving_mask --> instance of Structure class
             metric --> cost function metric to optimize (string)
         '''
-        supported_cls = (PatientImage,)
+        supported_cls = (Image,)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
@@ -1300,13 +1302,13 @@ class PlastimatchAdaptive(object):
         Returns appropriate objects for output image and vector field.
         
         Args:
-            fixed_image --> instance of PatientImage class
-            moving_image --> instance of PatientImage class
+            fixed_image --> instance of Image class
+            moving_image --> instance of Image class
             output_image_path --> path to output image file (string)
             output_vf_path --> path to output vector field file (string)
             metric --> cost function metric to optimize (string)
         '''
-        supported_cls = (PatientImage, Structure)
+        supported_cls = (Image, Structure)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
@@ -1366,13 +1368,13 @@ class PlastimatchAdaptive(object):
         Args:
             input_contours --> path to folder containing input structure files (string)
             output_contours --> path to folder to store deformed structures (string)
-            fixed_image --> instance of PatientImage class
-            moving_image --> instance of PatientImage class
+            fixed_image --> instance of Image class
+            moving_image --> instance of Image class
             fixed_mask --> instance of Structure class
             moving_mask --> instance of Structure class
             translate_first --> option to match images in 3D before running DIR (bool)
         '''
-        supported_cls = (PatientImage, Structure)
+        supported_cls = (Image, Structure)
         PlastimatchAdaptive.__input_check(fixed_image, supported_cls)
         PlastimatchAdaptive.__input_check(moving_image, supported_cls)
         
