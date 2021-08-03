@@ -5,6 +5,7 @@ Created on Tue Jul 13 10:30:55 2021
 @author: MBo
 """
 
+import os
 import numpy as np
 from medpy.io import load
 
@@ -13,13 +14,36 @@ Superclass
 '''
 
 class RTArray(object):
+    '''
+    Supports both args and kwargs as arguments.
+    Input string is saved as 'path'.
+    Input array is saved as Numpy array.
+    '''
+    def __init__(self, *args, **kwargs):
+        
+        self.__path = kwargs.get('path')
+        self.__ndarray = kwargs.get('ndarray')
+        self.__array_1D = kwargs.get('array_1D')
+        
+        for arg in args:
+            if type(arg) is str:
+                if self.__path is None:
+                    self.__path = arg
     
-    def __init__(self, path):
-        self.__path = path
-        self.__ndarray = None
-        self.__array_1D = None
-        self.__base_value = None
-
+            elif type(arg) is np.ndarray:
+                if np.ndim(arg) == 1:
+                    if self.__array_1D is None:
+                        self.__array_1D = arg
+                elif np.ndim(arg) > 2 < 5:
+                    if self.__ndarray is None:
+                        self.__ndarray = arg
+                else:
+                    raise Exception('Does not support {}-dimensional array.'.format(np.ndim(arg)))
+                    
+    def __check_file(self):
+        if not os.path.isfile(self.__path):
+            raise Exception('File does not exist.')
+    
     # Properties
     
     @property
@@ -32,15 +56,20 @@ class RTArray(object):
         return self.__ndarray
     @property
     def array_1D(self):
-        if self.__array_1D is None:
+        if self.__array_1D is not None:
+            return self.__array_1D
+        else:
             if self.__ndarray is not None:
                 if np.ndim(self.__ndarray) == 3:
                     return self.array_3D_to_1D(self.__ndarray)
     @property
     def n_voxels(self):
         if self.__ndarray is not None:
+            # Assuming it is a 3D or 4D (for VFs) array
             return self.__ndarray.shape[0] * self.__ndarray.shape[1] * self.__ndarray.shape[2]
-        else:    
+        elif self.__array_1D is not None:
+            return len(self.__array_1D)
+        else:
             return self.__n_voxels
     @property
     def n_dim(self):
@@ -52,6 +81,8 @@ class RTArray(object):
     def data_type(self):
         if self.__ndarray is not None:
             return self.__ndarray.dtype
+        elif self.__array_1D is not None:
+            return self.__array_1D.dtype
         else:
             return self.__data_type
     @property
@@ -102,6 +133,10 @@ class RTArray(object):
     @property
     def base_value(self):
         return self.__base_value
+    @property
+    def voxel_volume(self):
+        # In cm^3
+        return self.__header.spacing[0] * self.__header.spacing[1] * self.__header.spacing[2] / 10**3
     
     # Setters
     
@@ -124,6 +159,7 @@ class RTArray(object):
     # Methods
     
     def load_file(self):
+        self.__check_file()
         self.__ndarray, self.__header = load(self.__path)
             
     def load_header(self):
@@ -131,6 +167,7 @@ class RTArray(object):
         Does not store array --> use to save memory
         Seems to be faster without explicitly deleting 'temp'?
         '''     
+        self.__check_file()
         temp, self.__header = load(self.__path)
         self.__n_voxels = temp.shape[0] * temp.shape[1] * temp.shape[2]
         self.__ndim = np.ndim(temp)

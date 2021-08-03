@@ -485,28 +485,6 @@ class PlastimatchAdaptive(object):
         return input_file.__class__(output_file_path), translation_vf
 
     @staticmethod
-    def get_translation_vf_shifts(vf_file):
-        '''
-        Returns shifts of a 3-DOF vector field in mm.
-        
-        Args:
-            vf_file --> instance of TranslationVF class
-        '''
-        supported_cls = (TranslationVF,)
-        PlastimatchAdaptive.__input_check(vf_file, supported_cls)
-        
-        vf_file.load_file()
-        
-        # Assuming each voxel receives the same shift:
-        voxel = vf_file.ndarray[0][0][0]
-        
-        shift_x = voxel[0]
-        shift_y = voxel[1]
-        shift_z = voxel[2]
-                
-        return shift_x, shift_y, shift_z
-
-    @staticmethod
     def warp_image(input_file, output_file_path, vf_file, default_value=None):
         '''
         Warps image using an input vector field.
@@ -1320,7 +1298,7 @@ class PlastimatchAdaptive(object):
                                                      output_vf_path = vf_temp_path,
                                                      metric = metric)
         
-        x,y,z = PlastimatchAdaptive.get_translation_vf_shifts(vf_temp)
+        x,y,z = vf_temp.get_shifts()
         os.remove(vf_temp.path)
         
         PlastimatchAdaptive.apply_manual_translation(moving_image,

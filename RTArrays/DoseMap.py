@@ -8,6 +8,6 @@ Created on Tue Jul 13 10:30:55 2021
 from RTArrays.RTArray import RTArray
 
 class DoseMap(RTArray):
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.base_value = 0.
