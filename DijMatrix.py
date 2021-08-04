@@ -7,16 +7,24 @@ Created on Wed Jul 14 10:28:25 2021
 
 import numpy as np
 from scipy import sparse
+from RTArrays import RTArray
 
 class DijMatrix(object):
 
-    def __init__(self, path):
-        self.__path = path
-        self.__csr_matrix = None
-        self.__n_beamlets = None
-        self.__n_voxels = None
-        self.__dose_array_1D = None
-        self.__dose_array_3D = None
+    def __init__(self, **kwargs):
+        
+        self.__path = kwargs.get('path')
+        self.__csr_matrix = kwargs.get('csr_matrix')
+        self.__scale = 1 if kwargs.get('scale') is None else kwargs.get('scale')
+
+        if self.__csr_matrix is None and self.__path is not None:
+            self.__csr_matrix = self.get_csr_matrix_from_npz()
+            if self.__scale != 1:
+                self.__csr_matrix = self.__csr_matrix * self.__scale
+
+        if self.__csr_matrix is not None:
+            self.__n_beamlets = np.shape(self.__csr_matrix)[0]
+            self.__n_voxels = np.shape(self.__csr_matrix)[1]
 
     # Properties
         
@@ -25,45 +33,37 @@ class DijMatrix(object):
         if path != '':
             self.__path = path
         return self.__path
-    
     @property
     def csr_matrix(self):
         return self.__csr_matrix
-    
+    @property
+    def scale(self):
+        return self.__scale
     @property
     def n_beamlets(self):
-        if self.__csr_matrix is not None:
-            return np.shape(self.__csr_matrix)[0]
-    
+        return self.__n_beamlets
     @property
     def n_voxels(self):
-        if self.__csr_matrix is not None:
-            return np.shape(self.__csr_matrix)[1]
-        
-    @property
-    def dose_array_1D(self):
-        return self.__dose_array_1D
-    
-    @property
-    def dose_array_3D(self):
-        return self.__dose_array_3D
+        return self.__n_voxels
     
     # Methods
     
-    def load_npz(self):
-        self.__csr_matrix = sparse.load_npz(self.__path)
+    def get_csr_matrix_from_npz(self):
+        return sparse.load_npz(self.__path)
+
+    def get_dense_dij_matrix(self):
+        if self.__csr_matrix is None:
+            self.load_npz()
+        return self.__csr_matrix.toarray()
 
     def get_dose_array_1D(self):
         if self.__csr_matrix is None:
             self.load_npz()
-        self.__dose_array_1D = self.__csr_matrix.sum(axis=0).A1
-        return self.__dose_array_1D
+        return self.__csr_matrix.sum(axis=0).A1
     
     def get_dose_array_3D(self, nx, ny, nz):
-        if self.__dose_array_1D is None:
-            self.get_dose_array_1D()
-        self.__dose_array_3D = self.dose_array_1D.reshape(nz, ny, nx)
-        return self.__dose_array_3D
+        temp = self.get_dose_array_1D()
+        return RTArray.array_1D_to_3D(temp, nx, ny, nz)
         
     def print_properties(self):
         props = [p for p in dir(DijMatrix) if isinstance(getattr(DijMatrix,p), property) and hasattr(self,p)]

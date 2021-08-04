@@ -8,21 +8,20 @@ Created on Tue Jul 13 10:30:55 2021
 from RTArrays.RTArray import RTArray
 
 class Image(RTArray):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 class ImageCT(Image):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.base_value = -1000.
 
 class ImageCBCT(Image):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.base_value = -1000.
 
 class ImageMRI(Image):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-    
-# TODO: base value for MRI?
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.base_value = 0.

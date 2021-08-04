@@ -8,13 +8,13 @@ Created on Tue Jul 13 10:30:55 2021
 from RTArrays.RTArray import RTArray
 
 class VectorField(RTArray):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.base_value = 0.
 
 class TranslationVF(VectorField):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         
     @property
     def shift_x(self):
@@ -31,14 +31,14 @@ class TranslationVF(VectorField):
             self.load_file()
         # Assuming each voxel receives the same shift:
         voxel = self.ndarray[0][0][0]
-                
+        
         return voxel[0], voxel[1], voxel[2]
 
 class RigidVF(VectorField):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 class BSplineVF(VectorField):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 

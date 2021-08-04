@@ -15,31 +15,30 @@ Superclass
 
 class RTArray(object):
     '''
-    Supports both args and kwargs as arguments.
-    Input string is saved as 'path'.
-    Input array is saved as Numpy array.
+    Keywords arguments:
+        path --> file path (string)
+        ndarray --> 3D or 4D array (numpy.ndarray)
+        array_1D --> 1D array (numpy.ndarray)
+        skip_load --> option to skip load when 'path' is provided (bool)
+        header_only --> option to not save array into memory (bool)
     '''
-    def __init__(self, *args, **kwargs):
-        
+    def __init__(self, **kwargs):
         self.__path = kwargs.get('path')
         self.__ndarray = kwargs.get('ndarray')
         self.__array_1D = kwargs.get('array_1D')
-        
-        for arg in args:
-            if type(arg) is str:
-                if self.__path is None:
-                    self.__path = arg
-    
-            elif type(arg) is np.ndarray:
-                if np.ndim(arg) == 1:
-                    if self.__array_1D is None:
-                        self.__array_1D = arg
-                elif np.ndim(arg) > 2 < 5:
-                    if self.__ndarray is None:
-                        self.__ndarray = arg
+        self.__skip_load = kwargs.get('skip_load')
+        self.__header_only = kwargs.get('header_only')
+        if self.__path is not None:
+            if self.__skip_load is not True:
+                if self.__header_only is True:
+                    self.load_header()
                 else:
-                    raise Exception('Does not support {}-dimensional array.'.format(np.ndim(arg)))
-                    
+                    self.load_file()
+        if self.__array_1D is None:
+            if self.__ndarray is not None:
+                if np.ndim(self.__ndarray) == 3:
+                    self.__array_1D = self.array_3D_to_1D(self.__ndarray)
+
     def __check_file(self):
         if not os.path.isfile(self.__path):
             raise Exception('File does not exist.')
@@ -56,33 +55,30 @@ class RTArray(object):
         return self.__ndarray
     @property
     def array_1D(self):
-        if self.__array_1D is not None:
-            return self.__array_1D
-        else:
-            if self.__ndarray is not None:
-                if np.ndim(self.__ndarray) == 3:
-                    return self.array_3D_to_1D(self.__ndarray)
-    @property
-    def n_voxels(self):
-        if self.__ndarray is not None:
-            # Assuming it is a 3D or 4D (for VFs) array
-            return self.__ndarray.shape[0] * self.__ndarray.shape[1] * self.__ndarray.shape[2]
-        elif self.__array_1D is not None:
-            return len(self.__array_1D)
-        else:
-            return self.__n_voxels
+        return self.__array_1D
     @property
     def n_dim(self):
         if self.__ndarray is not None:
-            return np.ndim(self.__ndarray)
+            return self.__ndarray.ndim
         else:
             return self.__ndim
     @property
+    def n_voxels(self):
+        if self.__array_1D is not None:
+            return self.__array_1D.size
+        elif self.__ndarray is not None:
+            if self.__ndarray.ndim == 3:
+                return self.__ndarray.size
+            elif self.__ndarray.ndim == 4:
+                return self.__ndarray.size/3
+        else:
+            return self.__n_voxels
+    @property
     def data_type(self):
-        if self.__ndarray is not None:
-            return self.__ndarray.dtype
-        elif self.__array_1D is not None:
+        if self.__array_1D is not None:
             return self.__array_1D.dtype
+        elif self.__ndarray is not None:
+            return self.__ndarray.dtype
         else:
             return self.__data_type
     @property
@@ -165,29 +161,35 @@ class RTArray(object):
     def load_header(self):
         '''
         Does not store array --> use to save memory
-        Seems to be faster without explicitly deleting 'temp'?
         '''     
         self.__check_file()
         temp, self.__header = load(self.__path)
-        self.__n_voxels = temp.shape[0] * temp.shape[1] * temp.shape[2]
         self.__ndim = np.ndim(temp)
+        self.__n_voxels = temp.shape[0] * temp.shape[1] * temp.shape[2]
         self.__data_type = temp.dtype
         self.__size_x = temp.shape[0]
         self.__size_y = temp.shape[1]
         self.__size_z = temp.shape[2]
 
     def print_properties(self):
-        props = [p for p in dir(RTArray) if isinstance(getattr(RTArray,p), property) and hasattr(self,p)]
+        c = self.__class__
+        props = [p for p in dir(c) if isinstance(getattr(c,p), property) and hasattr(self,p)]
         for p in props:
             print(p + ' = ' +str(getattr(self, p)))
     
     # Static methods
-    
+
+    @staticmethod
+    def array_1D_to_3D(array_1D, nx, ny, nz):
+        arr = array_1D.reshape(nz, ny, nx)
+        arr = np.rot90(arr, 3, (0,2))
+        return arr
+        
     @staticmethod
     def array_3D_to_1D(array_3D):
-        array_temp = np.flip(array_3D, 2)
-        array_temp = np.flipud(array_temp)
-        array_temp = np.rot90(array_temp, 3, (0,2))
-        array_1D = np.reshape(array_temp, -1)
-        return array_1D
+        arr = np.rot90(array_3D, 1, (0,2))
+        arr = arr.ravel()
+        return arr
+
+
 
