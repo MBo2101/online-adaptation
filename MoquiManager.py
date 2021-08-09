@@ -18,6 +18,8 @@ class MoquiManager(object):
     def exe_path(self):
         return self.__exe_path
     
+    # Methods
+    
     def print_properties(self):
         c = self.__class__
         props = [p for p in dir(c) if isinstance(getattr(c,p), property) and hasattr(self,p)]
