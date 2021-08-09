@@ -13,45 +13,38 @@ from time import time
 class NymphManager(object):
 
     def __init__(self):
-        self.__functions_list = []
-        self.__functions_string = ''
         self.__exe_path = '/shared/build/nymph/nymph'
         self.__dij_path = '/shared/build/nymph/dij.bin'
         self.__functions_path = '/shared/build/nymph/functions.bin'
         self.__output_path = '/shared/build/nymph/x.bin'
+        self.__functions_list = []
+        self.__functions_string = ''
         self.__log = ''
         self.__opt_time = 0
     
     # Properties
     
     @property
-    def functions_list(self):
-        return self.__functions_list
-    
-    @property
-    def functions_string(self):
-        return self.__functions_string
-    
-    @property
     def exe_path(self):
         return self.__exe_path
-
     @property
     def dij_path(self):
         return self.__dij_path
-    
     @property
     def functions_path(self):
         return self.__functions_path
-    
     @property
     def output_path(self):
         return self.__output_path
-    
+    @property
+    def functions_list(self):
+        return self.__functions_list
+    @property
+    def functions_string(self):
+        return self.__functions_string
     @property
     def log(self):
         return self.__log
-    
     @property
     def opt_time(self):
         return self.__opt_time
@@ -67,7 +60,7 @@ class NymphManager(object):
         # TODO: finish function to document used objectives/constraints
         pass
         
-    def write_nymph_dij_file(self, dij_matrix, preexisting_dose=None, file_path=None):
+    def write_dij_input(self, dij_matrix, preexisting_dose=None, file_path=None):
         '''
         Writes Dij matrix to binary file for Nymph input.
         '''
@@ -85,7 +78,7 @@ class NymphManager(object):
                 f.write(np.array([0, 10, len(preexisting_dose)]).astype('u8').tobytes())
                 f.write(preexisting_dose.astype('d').tobytes())
     
-    def write_nymph_functions_file(self, file_path=None):
+    def write_functions_input(self, file_path=None):
         '''
         Writes optimization functions to binary file for Nymph input.
         '''
@@ -94,7 +87,7 @@ class NymphManager(object):
             for i in self.__functions_list:
                 f.write(i.tobytes())
     
-    def run_nymph_optimization(self):
+    def run_optimization(self):
         print('\nStarting Nymph optimization:')
         start_opt = time()
         run_opt = subprocess.Popen([self.__exe_path,
@@ -103,10 +96,10 @@ class NymphManager(object):
                                     '-o', self.__output_path], stdout=subprocess.PIPE)
         run_opt.wait()
         end_opt = time()
-        self.__nymph_log += (run_opt.stdout.read()).decode('utf-8')
+        self.__log += (run_opt.stdout.read()).decode('utf-8')
         self.__opt_time += end_opt - start_opt
         
-    def read_nymph_output(self, file_path=None):
+    def read_output(self, file_path=None):
         '''
         Reads Nymph's output file and returns optimized beamlet scales.
         '''
@@ -116,7 +109,13 @@ class NymphManager(object):
             n_beamlets = (struct.unpack('Q', file_bytes[0:8]))[0] # 1st 8 bytes (uint64) = number of elements
             scaling_factors = struct.unpack('d'*n_beamlets, file_bytes[8:])
         return np.array(scaling_factors, dtype='d')
-    
+
+    def print_properties(self):
+        c = self.__class__
+        props = [p for p in dir(c) if isinstance(getattr(c,p), property) and hasattr(self,p)]
+        for p in props:
+            print(p + ' = ' +str(getattr(self, p)))
+
     # Methods: defining functions
     
     def clear_functions(self):

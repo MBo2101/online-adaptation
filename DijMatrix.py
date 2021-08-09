@@ -81,8 +81,8 @@ class DijMatrix(object):
         return RTArray.array_1D_to_3D(temp, nx, ny, nz)
         
     def print_properties(self):
-        props = [p for p in dir(DijMatrix) if isinstance(getattr(DijMatrix,p), property) and hasattr(self,p)]
+        c = self.__class__
+        props = [p for p in dir(c) if isinstance(getattr(c,p), property) and hasattr(self,p)]
         for p in props:
             print(p + ' = ' +str(getattr(self, p)))
-            
             
