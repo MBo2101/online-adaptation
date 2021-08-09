@@ -13,6 +13,8 @@ class Structure(RTArray):
         super().__init__(**kwargs)
         self.base_value = 0.
     
+    # Properties
+    
     @property
     def volume(self):
         if self.ndarray is None:
@@ -23,6 +25,8 @@ class Structure(RTArray):
     @property
     def voxel_indices(self):
         return self.array_1D.nonzero()[0]
+    
+    # Methods
     
     def get_intersection_indices(self, structure):
         '''
@@ -51,5 +55,3 @@ class Structure(RTArray):
         array_in_mask = self.array_1D[mask.voxel_indices]
         return np.nonzero(array_in_mask)[0]
 
-
-        

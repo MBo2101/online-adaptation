@@ -25,6 +25,9 @@ class DijMatrix(object):
         if self.__csr_matrix is not None:
             self.__n_beamlets = np.shape(self.__csr_matrix)[0]
             self.__n_voxels = np.shape(self.__csr_matrix)[1]
+            self.__nnz_elements = self.__csr_matrix.nnz
+            self.__nnz_beamlets, self.__nnz_voxels = self.__csr_matrix.nonzero()
+            self.__nnz_values = self.__csr_matrix.data
 
     # Properties
         
@@ -45,7 +48,19 @@ class DijMatrix(object):
     @property
     def n_voxels(self):
         return self.__n_voxels
-    
+    @property
+    def nnz_elements(self):
+        return self.__nnz_elements
+    @property
+    def nnz_voxels(self):
+        return self.__nnz_voxels
+    @property
+    def nnz_beamlets(self):
+        return self.__nnz_beamlets
+    @property
+    def nnz_values(self):
+        return self.__nnz_values
+
     # Methods
     
     def get_csr_matrix_from_npz(self):
