@@ -383,7 +383,7 @@ class PlastimatchAdaptive(object):
         
         dirpath = os.path.dirname(input_file.path)
         temp_path = os.path.join(dirpath, 'ext_temp.mha')
-        translation_vf = TranslationVF(output_vf_path)
+        translation_vf = TranslationVF(output_vf_path, skip_load=True)
         
         input_file.load_header()
         

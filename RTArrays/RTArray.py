@@ -22,12 +22,19 @@ class RTArray(object):
         skip_load --> option to skip load when 'path' is provided (bool)
         header_only --> option to not save array into memory (bool)
     '''
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
+        
         self.__path = kwargs.get('path')
         self.__ndarray = kwargs.get('ndarray')
         self.__array_1D = kwargs.get('array_1D')
         self.__skip_load = kwargs.get('skip_load')
         self.__header_only = kwargs.get('header_only')
+        
+        for arg in args:
+            if type(arg) is str:
+                if self.__path is None:
+                    self.__path = arg
+                    
         if self.__path is not None:
             if self.__skip_load is not True:
                 if self.__header_only is True:

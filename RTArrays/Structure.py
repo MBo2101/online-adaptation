@@ -9,8 +9,8 @@ from RTArrays.RTArray import RTArray
 import numpy as np
 
 class Structure(RTArray):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.base_value = 0.
     
     # Properties
