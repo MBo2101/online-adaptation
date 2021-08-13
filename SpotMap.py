@@ -10,12 +10,14 @@ import numpy as np
 import pydicom
 from BeamModel import BeamModel
 
+# TODO: decide where to put beam model name
+
 class SpotMap(object):
 
-    def __init__(self, rtplan_file_path=None, tramps_folder_path=None, **kwargs):
+    def __init__(self, beam_model_name, rtplan_file_path=None, tramps_folder_path=None, **kwargs):
         
         if rtplan_file_path is not None:
-            self.load_from_rtplan(rtplan_file_path)
+            self.load_from_rtplan(rtplan_file_path, beam_model_name)
             
         elif tramps_folder_path is not None:
             self.load_from_tramps(tramps_folder_path)
@@ -107,11 +109,13 @@ class SpotMap(object):
     #     elif self.__n_beams == 1:
     #         return self
     
-    def load_from_rtplan(self, rtplan_file_path):
+    def load_from_rtplan(self, rtplan_file_path, beam_model_name):
+        
         energies      = np.array([], dtype='d')
         x_coordinates = np.array([], dtype='d')
         y_coordinates = np.array([], dtype='d')
         weights_mu    = np.array([], dtype='d')
+        weights_gp    = np.array([], dtype='d')
         labels        = np.array([], dtype='U')
         ds = pydicom.dcmread(rtplan_file_path)
         
@@ -133,16 +137,20 @@ class SpotMap(object):
                     else:
                         weight_mu = ICPS[layer_index*2].ScanSpotMetersetWeights[beamlet_index]
                         
+                    weight_gp = weight_mu * BeamModel(beam_model_name).get_MU2Gp_factor(energy)
+                        
                     energies      = np.append(energies,      energy)
                     x_coordinates = np.append(x_coordinates, x_coordinate)
                     y_coordinates = np.append(y_coordinates, y_coordinate)
                     weights_mu    = np.append(weights_mu,    weight_mu)
+                    weights_gp    = np.append(weights_gp,    weight_gp)
                     labels        = np.append(labels,        beam_name)
         
         self.__beamlet_energies    = energies
         self.__x_coordinates       = x_coordinates
         self.__y_coordinates       = y_coordinates
         self.__beamlet_weights_MU  = weights_mu
+        self.__beamlet_weights_Gp  = weights_gp
         self.__beamlet_labels      = labels
     
         #     total_weight_MU = total_weight_MU + spot_weight_MU
