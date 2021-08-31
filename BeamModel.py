@@ -13,6 +13,7 @@ class BeamModel(object):
 
     def __init__(self, name):
         self.__name = name
+        self.__MU2Gp = self.get_MU2Gp_factor
     
     # Properties
     
@@ -20,13 +21,21 @@ class BeamModel(object):
     def name(self):
         return self.__name
     
+    @property
+    def MU2Gp(self):
+        return self.__MU2Gp
+    
     # Methods
     
     def print_properties(self):
         c = self.__class__
         props = [p for p in dir(c) if isinstance(getattr(c,p), property) and hasattr(self,p)]
         for p in props:
-            print(p + ' = ' +str(getattr(self, p)))
+            if not callable(getattr(self, p)):    
+                print(p + ' = ' +str(getattr(self, p)))
+            else:
+                print(p + ' = ' +str(getattr(self, p)))
+                # print(p + ' --> is a function')
 
     def get_MU2Gp_factor(self, beamlet_energy):
     

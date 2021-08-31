@@ -8,35 +8,49 @@ Created on Wed Jul 14 10:28:25 2021
 import numpy as np
 # from pydicom import dcmread
 import pydicom
-from BeamModel import BeamModel
 
 # TODO: decide where to put beam model name
 
 class SpotMap(object):
 
-    def __init__(self, beam_model_name, rtplan_file_path=None, tramps_folder_path=None, **kwargs):
+    def __init__(self, **kwargs):
+        '''
+        Keyword arguments:
+            rtplan_file_path
+            tramps_folder_path
+            MU2Gp_function
+        '''
+        rtplan_file_path   = kwargs.get('rtplan_file_path')
+        tramps_folder_path = kwargs.get('tramps_folder_path')
+        MU2Gp_function     = kwargs.get('MU2Gp_function')
         
         if rtplan_file_path is not None:
-            self.load_from_rtplan(rtplan_file_path, beam_model_name)
+            self.load_from_rtplan(rtplan_file_path)
             
         elif tramps_folder_path is not None:
             self.load_from_tramps(tramps_folder_path)
         
         else:
-            self.__beamlet_energies    = np.array(kwargs.get('energies'),      dtype='d')
-            self.__x_coordinates       = np.array(kwargs.get('x_coordinates'), dtype='d')
-            self.__y_coordinates       = np.array(kwargs.get('y_coordinates'), dtype='d')
-            self.__beamlet_weights_MU  = np.array(kwargs.get('weights_mu'),    dtype='d')
-            self.__beamlet_weights_Gp  = np.array(kwargs.get('weights_gp'),    dtype='d')
-            self.__beamlet_labels      = np.array(kwargs.get('labels'),        dtype='U')
+            self.__energies      = np.array(kwargs.get('energies'),      dtype='d')
+            self.__x_coordinates = np.array(kwargs.get('x_coordinates'), dtype='d')
+            self.__y_coordinates = np.array(kwargs.get('y_coordinates'), dtype='d')
+            self.__weights_MU    = np.array(kwargs.get('weights_mu'),    dtype='d')
+            self.__weights_Gp    = np.array(kwargs.get('weights_gp'),    dtype='d')
+            self.__labels        = np.array(kwargs.get('labels'),        dtype='U')
         
-        u, ind = np.unique(self.__beamlet_labels, return_index=True)
+        u, ind = np.unique(self.__labels, return_index=True)
         
         self.__beam_names = u[np.argsort(ind)]
         self.__n_beams    = len(self.__beam_names)
-        self.__n_beamlets = len(self.__beamlet_energies)
-        self.__n_layers   = len(np.unique(self.__beamlet_energies))
-        self.__beamlet_indices = np.arange(self.__n_beamlets, dtype='int64')
+        self.__n_beamlets = len(self.__energies)
+        self.__n_layers   = len(np.unique(self.__energies))
+        self.__indices    = np.arange(self.__n_beamlets, dtype='int64')
+        
+        if not hasattr(self, 'weights_Gp'):
+            if MU2Gp_function is None:
+                raise Exception('Please provide appropriate MU2Gp conversion function.')
+            else:
+                self.__weights_Gp = MU2Gp_function(self.__energies) * self.__weights_MU
 
     # Properties
 
@@ -54,7 +68,7 @@ class SpotMap(object):
         return self.__n_layers
     @property
     def energies(self):
-        return self.__beamlet_energies
+        return self.__energies
     @property
     def x_coordinates(self):
         return self.__x_coordinates
@@ -63,13 +77,13 @@ class SpotMap(object):
         return self.__y_coordinates
     @property
     def weights_MU(self):
-        return self.__beamlet_weights_MU
+        return self.__weights_MU
     @property
     def weights_Gp(self):
-        return self.__beamlet_weights_Gp
+        return self.__weights_Gp
     @property
-    def beamlet_labels(self):
-        return self.__beamlet_labels
+    def labels(self):
+        return self.__labels
 
     # Methods
 
@@ -79,43 +93,23 @@ class SpotMap(object):
         for p in props:
             print(p + ' = ' +str(getattr(self, p)))
 
-    def get_beam_indices(self, beam_index):
-        name = self.__beam_names[beam_index]
-        return np.where(name == self.__beamlet_labels)[0]
+    def get_indices_per_beam(self):
+        lst = [np.where(self.__beam_names[beam_index] == self.__labels)[0] for beam_index in range(self.__n_beams)]
+        return tuple(lst)
 
     def get_tramp_matrix(self):
-        arr = np.array([self.__beamlet_energies,
+        arr = np.array([self.__energies,
                         self.__x_coordinates,
                         self.__y_coordinates,
-                        self.__beamlet_weights_Gp]).T
+                        self.__weights_Gp]).T
         return arr
     
-    # def get_for_beam_index(self, beam_index):
-    #     beam = np.unique(self.__beam_names)[beam_index]
-    #     indices = np.where(beam == self.__beam_names)[0]
-    #     return SpotMap(energies = self.__beamlet_energies[indices],
-    #                    x_coordinates = self.__x_coordinates[indices],
-    #                    y_coordinates = self.__y_coordinates[indices],
-    #                    weights_mu = self.__beamlet_weights_MU[indices],
-    #                    weights_gp = self.__beamlet_weights_Gp[indices],
-    #                    beam_names = self.__beam_names[indices])
-    
-    # def split_per_beam(self):
-    #     if self.__n_beams > 1:
-    #         lst = []
-    #         for beam_index in np.arange(self.__n_beams):
-    #             lst.append(self.get_for_beam_index(beam_index))
-    #         return tuple(lst)
-    #     elif self.__n_beams == 1:
-    #         return self
-    
-    def load_from_rtplan(self, rtplan_file_path, beam_model_name):
+    def load_from_rtplan(self, rtplan_file_path):
         
         energies      = np.array([], dtype='d')
         x_coordinates = np.array([], dtype='d')
         y_coordinates = np.array([], dtype='d')
         weights_mu    = np.array([], dtype='d')
-        weights_gp    = np.array([], dtype='d')
         labels        = np.array([], dtype='U')
         ds = pydicom.dcmread(rtplan_file_path)
         
@@ -137,21 +131,17 @@ class SpotMap(object):
                     else:
                         weight_mu = ICPS[layer_index*2].ScanSpotMetersetWeights[beamlet_index]
                         
-                    weight_gp = weight_mu * BeamModel(beam_model_name).get_MU2Gp_factor(energy)
-                        
                     energies      = np.append(energies,      energy)
                     x_coordinates = np.append(x_coordinates, x_coordinate)
                     y_coordinates = np.append(y_coordinates, y_coordinate)
                     weights_mu    = np.append(weights_mu,    weight_mu)
-                    weights_gp    = np.append(weights_gp,    weight_gp)
                     labels        = np.append(labels,        beam_name)
         
-        self.__beamlet_energies    = energies
-        self.__x_coordinates       = x_coordinates
-        self.__y_coordinates       = y_coordinates
-        self.__beamlet_weights_MU  = weights_mu
-        self.__beamlet_weights_Gp  = weights_gp
-        self.__beamlet_labels      = labels
+        self.__energies      = energies
+        self.__x_coordinates = x_coordinates
+        self.__y_coordinates = y_coordinates
+        self.__weights_MU    = weights_mu
+        self.__labels        = labels
     
         #     total_weight_MU = total_weight_MU + spot_weight_MU
         #     total_weight_Gp = total_weight_Gp + spot_weight_Gp
