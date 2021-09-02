@@ -54,9 +54,4 @@ class BeamModel(object):
             n = 0.921474
             
             return f(beamlet_energy) * (m*beamlet_energy+n) / 10**9
-    
-    # def get_beam_name(rtplan_file_path):
-    #     ds = pydicom.dcmread(rtplan_file_path)
-    #     beam_name = ds.IonBeamSequence[0].get(['4001', '1012']).value.decode('utf-8').strip(' ')
-    #     return beam_name
         
