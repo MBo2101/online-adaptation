@@ -12,47 +12,28 @@ from time import time
 
 class NymphManager(object):
 
-    def __init__(self):
-        self.__exe_path = '/shared/build/nymph/nymph'
-        self.__dij_path = '/shared/build/nymph/dij.bin'
-        self.__functions_path = '/shared/build/nymph/functions.bin'
-        self.__output_path = '/shared/build/nymph/x.bin'
-        self.__functions_list = []
-        self.__functions_string = ''
-        self.__log = ''
-        self.__opt_time = 0
-    
-    # Properties
-    
-    @property
-    def exe_path(self):
-        return self.__exe_path
-    @property
-    def dij_path(self):
-        return self.__dij_path
-    @property
-    def functions_path(self):
-        return self.__functions_path
-    @property
-    def output_path(self):
-        return self.__output_path
-    @property
-    def functions_list(self):
-        return self.__functions_list
-    @property
-    def functions_string(self):
-        return self.__functions_string
-    @property
-    def log(self):
-        return self.__log
-    @property
-    def opt_time(self):
-        return self.__opt_time
+    def __init__(self, dij_matrix, preexisting_dose=None):
+        self.exe_path = '/shared/build/nymph/nymph'
+        self.dij_path = '/shared/build/nymph/dij.bin'
+        self.functions_path = '/shared/build/nymph/functions.bin'
+        self.output_path = '/shared/build/nymph/x.bin'
+        self.functions_list = []
+        self.functions_string = ''
+        self.log = ''
+        self.opt_time = 0
+        self.n_voxels = dij_matrix.n_voxels
+        self.n_beamlets = dij_matrix.n_beamlets
+        self.nnz_elements = dij_matrix.nnz_elements
+        self.nnz_voxels = dij_matrix.nnz_voxels
+        self.nnz_beamlets = dij_matrix.nnz_beamlets
+        self.nnz_values = dij_matrix.nnz_values
+        self.preexisting_dose = preexisting_dose
+        self.beamlet_scales = None
 
     # Methods: general
     
     def print_help(self):
-        get_help = subprocess.Popen([self.__exe_path, '-h'], stdout=subprocess.PIPE)
+        get_help = subprocess.Popen([self.exe_path, '-h'], stdout=subprocess.PIPE)
         get_help.wait()
         print(get_help.stdout.read().decode('utf-8'))
     
@@ -60,50 +41,54 @@ class NymphManager(object):
         # TODO: finish function to document used objectives/constraints
         pass
         
-    def write_dij_input(self, dij_matrix, preexisting_dose=None, file_path=None):
+    def write_dij_input(self, file_path=None):
         '''
         Writes Dij matrix to binary file for Nymph input.
         '''
-        file_path = self.__dij_path if file_path is None else file_path
+        file_path = self.dij_path if file_path is None else file_path
         arr = np.array([0,0,
-                        dij_matrix.n_voxels,
-                        dij_matrix.n_beamlets,
-                        dij_matrix.nnz_elements])
+                        self.n_voxels,
+                        self.n_beamlets,
+                        self.nnz_elements])
         with open(file_path, 'bw') as f:
             f.write(arr.astype('u8').tobytes())
-            f.write(dij_matrix.nnz_voxels.astype('u8').tobytes())
-            f.write(dij_matrix.nnz_beamlets.astype('u8').tobytes())
-            f.write(dij_matrix.nnz_values.astype('f').tobytes())    
-            if preexisting_dose is not None:
-                f.write(np.array([0, 10, len(preexisting_dose)]).astype('u8').tobytes())
-                f.write(preexisting_dose.astype('d').tobytes())
+            f.write(self.nnz_voxels.astype('u8').tobytes())
+            f.write(self.nnz_beamlets.astype('u8').tobytes())
+            f.write(self.nnz_values.astype('f').tobytes())
+            if self.preexisting_dose is not None:
+                f.write(np.array([0, 10, len(self.preexisting_dose)]).astype('u8').tobytes())
+                f.write(self.preexisting_dose.astype('d').tobytes())
     
     def write_functions_input(self, file_path=None):
         '''
         Writes optimization functions to binary file for Nymph input.
         '''
-        file_path = self.__functions_path if file_path is None else file_path
+        file_path = self.functions_path if file_path is None else file_path
         with open(file_path, 'bw') as f:
-            for i in self.__functions_list:
+            for i in self.functions_list:
                 f.write(i.tobytes())
     
     def run_optimization(self):
-        print('\nStarting Nymph optimization:')
+        print('Writing Nymph files')
+        self.write_dij_input()
+        self.write_functions_input()
+        print('Starting Nymph optimization:')
         start_opt = time()
-        run_opt = subprocess.Popen([self.__exe_path,
-                                    '-dij', self.__dij_path,
-                                    '-f', self.__functions_path,
-                                    '-o', self.__output_path], stdout=subprocess.PIPE)
+        run_opt = subprocess.Popen([self.exe_path,
+                                    '-dij', self.dij_path,
+                                    '-f', self.functions_path,
+                                    '-o', self.output_path], stdout=subprocess.PIPE)
         run_opt.wait()
         end_opt = time()
-        self.__log += (run_opt.stdout.read()).decode('utf-8')
-        self.__opt_time += end_opt - start_opt
+        self.log += (run_opt.stdout.read()).decode('utf-8')
+        self.opt_time += end_opt - start_opt
+        self.beamlet_scales = self.read_output()
         
     def read_output(self, file_path=None):
         '''
         Reads Nymph's output file and returns optimized beamlet scales.
         '''
-        file_path = self.__output_path if file_path is None else file_path
+        file_path = self.output_path if file_path is None else file_path
         with open(file_path, 'rb') as f:
             file_bytes = f.read()
             n_beamlets = (struct.unpack('Q', file_bytes[0:8]))[0] # 1st 8 bytes (uint64) = number of elements
@@ -119,8 +104,8 @@ class NymphManager(object):
     # Methods: defining functions
     
     def clear_functions(self):
-        self.__functions_list = []
-        self.__functions_string = ''
+        self.functions_list = []
+        self.functions_string = ''
     
     def add_dose_function(self, obj_type, obj_or_con, weight, parameter, scenario, voxel_indices):
         if obj_type not in [0,1,2,3,4,5,6,7,20,21,22]:
@@ -131,74 +116,60 @@ class NymphManager(object):
             raise Exception('Use "minimize_worst_case" for this objective type.')
         if obj_type == 22:
             raise Exception('Use "minimize_functions_CVaR" for this objective type.')
-
         parameter = parameter if obj_type >3 else None
         n_voxels = len(voxel_indices)
-        
         lst = [np.array([obj_type, obj_or_con]).astype('B'),
                np.array([weight, parameter])[np.array([weight, parameter])!=None].astype('d'),
                np.array([scenario, n_voxels]).astype('Q'),
                np.array(voxel_indices).astype('Q')]
-        
-        for i in lst: self.__functions_list.append(i)
+        for i in lst: self.functions_list.append(i)
 
     def minimize_weighted_sum(self, weight, obj_indices, obj_weights):
         if not len(obj_indices) == len(obj_weights):
             raise Exception('Array sizes do not match.')
-        
         obj_type = 20
         obj_or_con = 0
-
         n_objectives = len(obj_indices)
-
         lst = [np.array([obj_type, obj_or_con]).astype('B'),
                np.array([weight]).astype('d'),
                np.array([n_objectives]).astype('Q'),
                np.array(obj_indices).astype('Q'),
                np.array(obj_weights).astype('d')]
-        
-        for i in lst: self.__functions_list.append(i)
+        for i in lst: self.functions_list.append(i)
 
     def minimize_worst_case(self, weight, obj_indices, obj_weights, obj_offsets):
         if not len(obj_indices) == len(obj_weights) == len(obj_offsets):
             raise Exception('Array sizes do not match.')
-
         obj_type = 21
         obj_or_con = 0
-
         n_objectives = len(obj_indices)
-
         lst = [np.array([obj_type, obj_or_con]).astype('B'),
                np.array([weight]).astype('d'),
                np.array([n_objectives]).astype('Q'),
                np.array(obj_indices).astype('Q'),
                np.array(obj_weights).astype('d'),
                np.array(obj_offsets).astype('d')]
-        
-        for i in lst: self.__functions_list.append(i)
+        for i in lst: self.functions_list.append(i)
         
     def minimize_functions_CVaR(self, weight, alpha, obj_indices):
-        
         obj_type = 22
         obj_or_con = 0
-
         n_objectives = len(obj_indices)
-
         lst = [np.array([obj_type, obj_or_con]).astype('B'),
                np.array([weight, alpha]).astype('d'),
                np.array([n_objectives]).astype('Q'),
                np.array(obj_indices).astype('Q')]
-        
-        for i in lst: self.__functions_list.append(i)
+        for i in lst: self.functions_list.append(i)
 
-    def mimic_dose(self, weight, scenario, voxel_indices, dose_map):
+    def mimic_dose(self, dose_map, weight=1, scenario=0, voxel_indices=None):
+        if voxel_indices is None:
+            voxel_indices = np.arange(0, len(dose_map))
         if not len(voxel_indices) == len(dose_map):
             raise Exception('Array sizes do not match.')
-        
         self.add_dose_function(4, 0, weight, -123.456, scenario, voxel_indices)
-        self.__functions_list.append(dose_map.astype('d'))
+        self.functions_list.append(dose_map.astype('d'))
         self.add_dose_function(5, 0, weight, -123.456, scenario, voxel_indices)
-        self.__functions_list.append(dose_map.astype('d'))
+        self.functions_list.append(dose_map.astype('d'))
 
 #%%
 # Nymph instructions

@@ -8,31 +8,32 @@ Created on Wed Jul 14 10:28:25 2021
 import numpy as np
 import os
 import pydicom
+from BeamModel import BeamModel
 
 class SpotMap(object):
-
+    '''
+    Load spot map either from tramp files, or from a DICOM RT plan file.
+    
+    Keyword arguments:
+        rtplan_file
+        tramps_folder
+    '''
     def __init__(self, **kwargs):
-        '''
-        Load spot map either from tramp files, or from a DICOM RT plan file.
-        In case of RT plan file: conversion function from MU to Gp needs to be provided.
+
+        rtplan_file    = kwargs.get('rtplan_file')
+        tramps_folder  = kwargs.get('tramps_folder')
+        machine_name   = kwargs.get('machine_name')
         
-        Keyword arguments:
-            rtplan_file_path
-            tramps_folder_path
-            MU2Gp_function
-        '''
-        rtplan_file_path   = kwargs.get('rtplan_file_path')
-        tramps_folder_path = kwargs.get('tramps_folder_path')
-        MU2Gp_function     = kwargs.get('MU2Gp_function')
-        
-        if rtplan_file_path is not None:
-            self.load_rtplan(rtplan_file_path)
+        if rtplan_file is not None:
+            self.load_rtplan(rtplan_file)
             
-        elif tramps_folder_path is not None:
-            self.load_tramps(tramps_folder_path)
+        elif tramps_folder is not None:
+            self.load_tramps(tramps_folder)
         
         # Converting MU to Gp
         if not hasattr(self, 'weights_Gp'):
+            beam_model = BeamModel(machine_name)
+            MU2Gp_function = beam_model.get_MU2Gp_factor()
             if MU2Gp_function is None:
                 raise Exception('Please provide appropriate MU2Gp conversion function.')
             else:
@@ -127,14 +128,14 @@ class SpotMap(object):
                         self.__weights_Gp]).T
         return arr
     
-    def load_rtplan(self, rtplan_file_path):
+    def load_rtplan(self, rtplan_file):
         
         energies      = np.array([], dtype='d')
         x_coordinates = np.array([], dtype='d')
         y_coordinates = np.array([], dtype='d')
         weights_mu    = np.array([], dtype='d')
         labels        = np.array([], dtype='U')
-        ds = pydicom.dcmread(rtplan_file_path)
+        ds = pydicom.dcmread(rtplan_file)
         
         for beam_index in range(len(ds.IonBeamSequence)):
             beam_name = ds.IonBeamSequence[beam_index].BeamName
@@ -166,8 +167,8 @@ class SpotMap(object):
         self.__weights_MU    = weights_mu
         self.__labels        = labels
     
-    def load_tramps(self, tramps_folder_path):
-        files_lst = os.listdir(tramps_folder_path)
+    def load_tramps(self, tramps_folder):
+        files_lst = os.listdir(tramps_folder)
         
         energies      = np.array([], dtype='d')
         x_coordinates = np.array([], dtype='d')
@@ -176,7 +177,7 @@ class SpotMap(object):
         labels        = np.array([], dtype='U')
         
         for file in files_lst:
-            with open(os.path.join(tramps_folder_path, file), 'r') as f:
+            with open(os.path.join(tramps_folder, file), 'r') as f:
                 lines = f.readlines()
                 for line in lines[:lines.index('# E(MeV) X(mm) Y(mm) N(Gp)\n')+1]:
                     if 'beam_name' in line:
@@ -195,13 +196,13 @@ class SpotMap(object):
         self.__weights_Gp    = weights_gp
         self.__labels        = labels
         
-    def write_tramps(self, tramps_folder_path):
+    def write_tramps(self, tramps_folder):
         file_names = ['beam_{}_{}.tramp'.format(np.where(self.__beam_names == i)[0][0], i) for i in self.__beam_names]
-        if not os.path.exists(tramps_folder_path):
-            os.makedirs(tramps_folder_path)
+        if not os.path.exists(tramps_folder):
+            os.makedirs(tramps_folder)
         for file in file_names:
             beam_index = file_names.index(file)
-            with open(os.path.join(tramps_folder_path, file), 'w') as f:
+            with open(os.path.join(tramps_folder, file), 'w') as f:
                 f.write('# beam_name {}\n'.format(self.__beam_names[beam_index]))
                 f.write('# n_layers {}\n'.format(self.__n_layers_per_beam[beam_index]))
                 f.write('# n_beamlets {}\n'.format(self.__n_beamlets_per_beam[beam_index]))
@@ -250,9 +251,9 @@ class SpotMap(object):
         w_ratio = round(subset_fluence/self.__fluence*100, 2)
         b_ratio = round(beamlet_counter/self.__n_beamlets*100, 2)
 
-        print('\nTotal weight of beamlet subset: {} out of {} --> {}%'.format(subset_fluence, 
-                                                                              self.__fluence, 
-                                                                              w_ratio))
+        print('Total weight of beamlet subset: {} out of {} --> {}%'.format(subset_fluence, 
+                                                                            self.__fluence, 
+                                                                            w_ratio))
         print('Number of beamlets in subset: {} out of {} --> {}%'.format(beamlet_counter, 
                                                                           self.__n_beamlets, 
                                                                           b_ratio))
@@ -277,9 +278,9 @@ class SpotMap(object):
         w_ratio = round(subset_fluence/self.__fluence*100, 2)
         b_ratio = round(n/self.__n_beamlets*100, 2)
 
-        print('\nTotal weight of beamlet subset: {} out of {} --> {}%'.format(subset_fluence, 
-                                                                              self.__fluence, 
-                                                                              w_ratio))
+        print('Total weight of beamlet subset: {} out of {} --> {}%'.format(subset_fluence, 
+                                                                            self.__fluence, 
+                                                                            w_ratio))
         print('Number of beamlets in subset: {} out of {} --> {}%'.format(n, 
                                                                           self.__n_beamlets,
                                                                           b_ratio))

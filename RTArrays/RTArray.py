@@ -8,6 +8,7 @@ Created on Tue Jul 13 10:30:55 2021
 import os
 import numpy as np
 from medpy.io import load
+# Consider using SimpleITK instead of MedPy
 
 '''
 Superclass
@@ -189,14 +190,12 @@ class RTArray(object):
     @staticmethod
     def array_1D_to_3D(array_1D, nx, ny, nz):
         arr = array_1D.reshape(nz, ny, nx)
-        arr = np.rot90(arr, 3, (0,2))
+        arr = np.swapaxes(arr, 0, 2)
         return arr
         
     @staticmethod
     def array_3D_to_1D(array_3D):
-        arr = np.rot90(array_3D, 1, (0,2))
+        arr = np.swapaxes(array_3D, 0, 2)
         arr = arr.ravel()
         return arr
-
-
 

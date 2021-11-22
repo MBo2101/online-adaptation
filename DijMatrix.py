@@ -6,22 +6,30 @@ Created on Wed Jul 14 10:28:25 2021
 """
 
 import numpy as np
+import os
 from scipy import sparse
 from RTArrays import RTArray
 
 class DijMatrix(object):
-
+    '''
+    Keywords arguments:
+        csr_matrix --> CSR matrix (scipy.sparse.csr.csr_matrix)
+        npz_file --> path to npz file (string)
+        npz_dir --> path to directory containing npz files (string)
+        scale --> scale to apply to Dij matrix (int / float)
+    '''
     def __init__(self, **kwargs):
-        
-        self.__path = kwargs.get('path')
         self.__csr_matrix = kwargs.get('csr_matrix')
-        self.__scale = 1 if kwargs.get('scale') is None else kwargs.get('scale')
+        self.__npz_file = kwargs.get('npz_file')
+        self.__npz_dir = kwargs.get('npz_dir')
+        self.__scale = kwargs.get('scale')
 
-        if self.__csr_matrix is None and self.__path is not None:
-            self.__csr_matrix = self.get_csr_matrix_from_npz()
-            if self.__scale != 1:
-                self.__csr_matrix = self.__csr_matrix * self.__scale
-
+        if self.__npz_file is not None:
+            self.__csr_matrix = self.get_csr_matrix_from_file()
+        if self.__npz_dir is not None:
+            self.__csr_matrix = self.get_csr_matrix_from_dir()
+        if self.__scale is not None:
+            self.__csr_matrix = self.__csr_matrix * self.__scale
         if self.__csr_matrix is not None:
             self.__n_beamlets = np.shape(self.__csr_matrix)[0]
             self.__n_voxels = np.shape(self.__csr_matrix)[1]
@@ -32,10 +40,15 @@ class DijMatrix(object):
     # Properties
         
     @property
-    def path(self, path = ''):
-        if path != '':
-            self.__path = path
-        return self.__path
+    def npz_file(self, npz_file = ''):
+        if npz_file != '':
+            self.__npz_file = npz_file
+        return self.__npz_file
+    @property
+    def npz_dir(self, npz_dir = ''):
+        if npz_dir != '':
+            self.__npz_dir = npz_dir
+        return self.__npz_dir
     @property
     def csr_matrix(self):
         return self.__csr_matrix
@@ -63,8 +76,21 @@ class DijMatrix(object):
 
     # Methods
     
-    def get_csr_matrix_from_npz(self):
-        return sparse.load_npz(self.__path)
+    def get_csr_matrix_from_file(self):
+        '''
+        Returns CSR matrix from single .npz file.
+        '''
+        return sparse.load_npz(self.__npz_file)
+    
+    def get_csr_matrix_from_dir(self):
+        '''
+        Returns CSR matrix (stacked) for all .npz files in directory.
+        '''
+        npz_filenames = [i for i in os.listdir(self.__npz_dir) if '.npz' in i]
+        npz_filepaths = [os.path.join(self.__npz_dir, i) for i in npz_filenames]
+        csr_matrices = [sparse.load_npz(i) for i in npz_filepaths]
+        csr_matrix = sparse.vstack(csr_matrices)
+        return csr_matrix
 
     def get_dense_dij_matrix(self):
         if self.__csr_matrix is None:
@@ -77,8 +103,8 @@ class DijMatrix(object):
         return self.__csr_matrix.sum(axis=0).A1
     
     def get_dose_array_3D(self, nx, ny, nz):
-        temp = self.get_dose_array_1D()
-        return RTArray.array_1D_to_3D(temp, nx, ny, nz)
+        arr = self.get_dose_array_1D()
+        return RTArray.array_1D_to_3D(arr, nx, ny, nz)
         
     def print_properties(self):
         c = self.__class__
