@@ -325,15 +325,23 @@ class DirStructure(object):
                                           histogram_mask,
                                           os.path.join(contours_dir, self.artifacts+'.mha'))
         PlastimatchAdaptive.get_intersection(histogram_mask,
-                                             os.path.join(contours_dir, self.__FOV_small_filename+'.mha'),
+                                             os.path.join(contours_dir, self.__FOV_small_filename),
                                              histogram_mask)
         PlastimatchAdaptive.values_histogram_matching(image_file,
                                                       ct_deformed,
-                                                      image_file,
-                                                      histogram_mask,
-                                                      histogram_mask,
-                                                      histogram_mask,
+                                                      os.path.join(fraction_dir, 'corrected_mean.mha'),
+                                                      [histogram_mask],
+                                                      [histogram_mask],
+                                                      [histogram_mask],
                                                       -500, 1500, 'mean')
+        PlastimatchAdaptive.values_histogram_matching(image_file,
+                                                      ct_deformed,
+                                                      os.path.join(fraction_dir, 'corrected_full.mha'),
+                                                      [histogram_mask],
+                                                      [histogram_mask],
+                                                      [histogram_mask],
+                                                      -500, 1500, 'full')
+        # os.remove(histogram_mask)
         
     def run_dose_calculation(self, fraction_name, plan_name):
         dct = self.get_fraction_dirs(fraction_name)

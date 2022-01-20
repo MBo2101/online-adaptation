@@ -37,9 +37,9 @@ patient_dir.set_structure_names(targets = target_names,
 # CT
 patient_dir.generate_masks('ct') # Get additional masks: "target", "dij_mask", "conformality_shell"
 patient_dir.modify_image_HUs('ct') # Modify image file: external and artifact masking
-# patient_dir.run_dose_calculation('ct', plan_name) # Run dose calculation for the nominal plan
-# patient_dir.run_plan_adaptation('ct', plan_name) # Run plan adaptation
-# patient_dir.get_plastimatch_DVHs('ct') # Generate DVHs using Plastimatch
+patient_dir.run_dose_calculation('ct', plan_name) # Run dose calculation for the nominal plan
+patient_dir.run_plan_adaptation('ct', plan_name) # Run plan adaptation
+patient_dir.get_plastimatch_DVHs('ct') # Generate DVHs using Plastimatch
 
 sys.exit()
 
@@ -52,10 +52,10 @@ for cbct_name in patient_dir.cbcts.names:
     patient_dir.generate_masks(cbct_name) # Get additional masks: "target", "dij_mask", "conformality_shell"
     patient_dir.modify_cbct_beyond_FOV(cbct_name) # Modify image file: filling CBCT outside the FOV
     patient_dir.modify_image_HUs(cbct_name) # Modify image file: external and artifact masking
-    patient_dir.apply_cbct_HU_histogram_correction(cbct_name) # Modify image file: HU histogram-based correction
-    # patient_dir.run_dose_calculation(cbct_name, plan_name) # Run dose calculation for the nominal plan
-    # patient_dir.run_plan_adaptation(cbct_name, plan_name) # Run plan adaptation
-    # patient_dir.get_plastimatch_DVHs(cbct_name) # Generate DVHs using Plastimatch
+    # patient_dir.apply_cbct_HU_histogram_correction(cbct_name) # Modify image file: HU histogram-based correction
+    patient_dir.run_dose_calculation(cbct_name, plan_name) # Run dose calculation for the nominal plan
+    patient_dir.run_plan_adaptation(cbct_name, plan_name) # Run plan adaptation
+    patient_dir.get_plastimatch_DVHs(cbct_name) # Generate DVHs using Plastimatch
 
 
 

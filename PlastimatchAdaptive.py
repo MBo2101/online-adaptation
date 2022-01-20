@@ -1336,9 +1336,9 @@ class PlastimatchAdaptive(object):
                                     --> 'none' will just read and compare the histograms of the two image files without any corrections
         '''
         dirpath = os.path.dirname(output_image)
-        histogram_matching_dir = os.path.join(dirpath, 'histogram_matching')
+        histogram_matching_dir = os.path.join(dirpath, 'histogram_matching_{}'.format(correction_type))
         if not os.path.exists(histogram_matching_dir):
-            os.maskedirs(histogram_matching_dir)
+            os.makedirs(histogram_matching_dir)
         input_image_temp = os.path.join(dirpath, 'input_temp.mha')
         reference_image_temp = os.path.join(dirpath, 'reference_temp.mha')
         # Mask image files
@@ -1371,8 +1371,8 @@ class PlastimatchAdaptive(object):
         arr_2 = np.delete(arr_2, np.where(arr_2 > histogram_threshold_max))
         n_bins = int(histogram_threshold_max - histogram_threshold_min)
         # Generate plot 1:
-        reference_name = os.path.splitext(os.path.basename(reference_image))
-        input_name = os.path.splitext(os.path.basename(input_image))
+        reference_name = os.path.splitext(os.path.basename(reference_image))[0]
+        input_name = os.path.splitext(os.path.basename(input_image))[0]
         fig, axes = plt.subplots(2)
         counts_arr_1, range_arr_1, bar_container = axes[1].hist(arr_1, bins = n_bins,      cumulative=True, alpha=0.7, label=reference_name)
         counts_arr_2, range_arr_2, bar_container = axes[1].hist(arr_2, bins = range_arr_1, cumulative=True, alpha=0.7, label=input_name)
@@ -1388,10 +1388,10 @@ class PlastimatchAdaptive(object):
         plt.savefig(os.path.join(histogram_matching_dir, 'histograms_pre_matching.png'))
         plt.show()
         os.remove(input_image_temp)
-        os.remove(reference_image_temp)
-        os.remove(input_image_masks)
-        os.remove(reference_image_masks)
+        os.remove(reference_mask_temp)
         if correction_type == 'none':
+            os.remove(reference_image_temp)
+            os.remove(input_mask_temp)
             return
         # Method 1: Piecewise linear correction based on cumulative histograms
         elif correction_type == 'full':
@@ -1436,7 +1436,7 @@ class PlastimatchAdaptive(object):
             with open(os.path.join(histogram_matching_dir, 'histogram_matching_info.txt'), 'w') as f:
                 f.write('Applied shift based on {}.\n'.format(correction_type))
                 f.write('Function:\n')
-                f.write('+{}'.format(difference))
+                f.write('(+) {}'.format(difference))
             os.remove(values_temp)
         # Compare histograms for corrected image --> generate plot 2
         if input_image_masks is not None:
@@ -1447,17 +1447,19 @@ class PlastimatchAdaptive(object):
                                            histogram_threshold_min-1)
             arr_2 = RTArray(output_image_temp).array_1D
             os.remove(output_image_temp)
+            os.remove(input_mask_temp)
         else:
             arr_2 = RTArray(output_image).array_1D
         arr_1 = RTArray(reference_image_temp).array_1D
+        os.remove(reference_image_temp)
         arr_1 = np.delete(arr_1, np.where(arr_1 < histogram_threshold_min))
         arr_2 = np.delete(arr_2, np.where(arr_2 < histogram_threshold_min))
         arr_1 = np.delete(arr_1, np.where(arr_1 > histogram_threshold_max))
         arr_2 = np.delete(arr_2, np.where(arr_2 > histogram_threshold_max))
         n_bins = int(histogram_threshold_max - histogram_threshold_min)
         # Generate plot 1:
-        reference_name = os.path.splitext(os.path.basename(reference_image))
-        input_name = os.path.splitext(os.path.basename(input_image))
+        reference_name = os.path.splitext(os.path.basename(reference_image))[0]
+        input_name = os.path.splitext(os.path.basename(input_image))[0]
         fig, axes = plt.subplots(2)
         counts_arr_1, range_arr_1, bar_container = axes[1].hist(arr_1, bins = n_bins,      cumulative=True, alpha=0.7, label=reference_name)
         counts_arr_2, range_arr_2, bar_container = axes[1].hist(arr_2, bins = range_arr_1, cumulative=True, alpha=0.7, label=input_name)
@@ -1478,4 +1480,4 @@ class PlastimatchAdaptive(object):
                                              output_image,
                                              output_image,
                                              *output_image_masks)
-        
+            

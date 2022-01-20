@@ -12,7 +12,7 @@ from time import time
 class MoquiManager(object):
 
     def __init__(self, machine_name):
-        self.exe_path = '/shared/build/moqui/moqui_adaptive_v4'
+        self.exe_path = '/shared/build/moqui/moqui_adaptive_seed_test'
         self.machine_name = machine_name
         self.log = ''
         self.sim_time = 0
