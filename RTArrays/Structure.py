@@ -51,7 +51,11 @@ class Structure(RTArray):
         '''
         Returns structure's voxel indices within input mask (Structure class).
         Use if a mask was applied to the Dij matrix.
+        Returns self.voxel_indices if mask is None.
         '''
-        array_in_mask = self.array_1D[mask.voxel_indices]
-        return np.nonzero(array_in_mask)[0]
+        if mask is not None:
+            array_in_mask = self.array_1D[mask.voxel_indices]
+            return np.nonzero(array_in_mask)[0]
+        else:
+            return self.voxel_indices
 

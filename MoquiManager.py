@@ -7,33 +7,15 @@ Created on Wed Jul 14 10:28:25 2021
 
 import subprocess
 import os
+from time import time
 
 class MoquiManager(object):
 
     def __init__(self, machine_name):
-        self.__exe_path = '/shared/build/moqui/moqui'
-        self.__machine_name = machine_name
-        self.__stdout_str = ''
-    
-    # Properties
-    
-    @property
-    def exe_path(self):
-        return self.__exe_path
-    @property
-    def machine_name(self):
-        return self.__machine_name
-    @property
-    def stdout_str(self):
-        return self.__stdout_str
-    
-    # Methods
-    
-    def print_properties(self):
-        c = self.__class__
-        props = [p for p in dir(c) if isinstance(getattr(c,p), property) and hasattr(self,p)]
-        for p in props:
-            print(p + ' = ' +str(getattr(self, p)))
+        self.exe_path = '/shared/build/moqui/moqui_adaptive_v4'
+        self.machine_name = machine_name
+        self.log = ''
+        self.sim_time = 0
     
     def run_simulation(self,
                        output_dir,
@@ -43,27 +25,22 @@ class MoquiManager(object):
                        tramps_dir=None,
                        masks=None):
         Scorer = mode
-        if masks is not None:
+        ScoringMask = 'false'
+        Mask = None
+        if masks is not None and masks != [None]:
             ScoringMask = 'true'
             Mask = ', '.join([i for i in masks])
-        Machine = self.__machine_name
+        Machine = self.machine_name
         OutputDir = output_dir
-        if mode == 'dose':
-            OutputFormat = 'mha'
-            launcher_file = os.path.join(output_dir, 'moqui_dose.in')
-            log_file = os.path.join(output_dir, 'moqui_dose.log')
-        elif mode == 'dij':
-            OutputFormat = 'npz'
-            launcher_file = os.path.join(output_dir, 'moqui_dij.in')
-            log_file = os.path.join(output_dir, 'moqui_dij.log')
-        else:
-            raise TypeError('\nMode not recognized. Use "dose" or "dij" mode.')
+        if mode == 'dose': OutputFormat = 'mha'
+        elif mode == 'dij': OutputFormat = 'npz'
+        else: raise TypeError('\nMode not recognized. Use "dose" or "dij" mode.')
         DicomDir = os.path.dirname(rtplan_file)
         
         file_text = '## Global parameters for simulation'\
                     '\n'\
                     '\nGPUID 0'\
-                    '\nRandomSeeed 1000 # (integer, use negative value if use current time)'\
+                    '\nRandomSeed 1000 # (integer, use negative value if use current time)'\
                     '\nUseAbsolutePath true'\
                     '\nTotalThreads -1 # (integer, use negative value for using optimized number of threads)'\
                     '\nMaxHistoriesPerBatch 0'\
@@ -85,10 +62,10 @@ class MoquiManager(object):
                     '\nSimulationType perBeam'\
                     '\nBeamNumbers 0'\
                     '\nSourceExtension tramp'\
-                    '\nParticleHistories 1000000'\
+                    '\nParticlesPerHistory 10000'\
                     '\nCTClipping true'\
-                    '\nMachine {}'\
-                    '\nScoreToCTGrid'\
+                    '\nMachine MGH:{}'\
+                    '\nScoreToCTGrid true'\
                     '\n'\
                     '\n## Output path'\
                     '\n'\
@@ -107,26 +84,24 @@ class MoquiManager(object):
                             OutputFormat,
                             DicomDir)
                     
-        if image_file is not None:
-            file_text += '\nCTVolumeName {}'.format(image_file)
-        if tramps_dir is not None:
-            file_text += '\nTrampDir {}'.format(tramps_dir)
-
+        if image_file is not None: file_text += '\nCTVolumeName {}'.format(image_file)
+        if tramps_dir is not None: file_text += '\nTrampDir {}'.format(tramps_dir)
+        if not os.path.exists(output_dir): os.makedirs(output_dir)
+        launcher_file = os.path.join(output_dir, 'moqui_{}.in'.format(mode))
         with open(launcher_file, 'w') as f:
             f.write(file_text)
-            
-        run = subprocess.Popen([self.__exe_path, launcher_file], stdout=subprocess.PIPE)
+        
+        start_sim = time()
+        run = subprocess.Popen([self.exe_path, launcher_file], stdout=subprocess.PIPE)
         while True:
             output_line = run.stdout.readline().decode('utf-8')
-            if run.poll() is not None:
-                break
+            if run.poll() is not None: break
             if output_line:
-                self.__stdout_str += output_line
+                self.log += output_line
                 print(output_line.strip())
+        end_sim = time()
+        self.sim_time += end_sim - start_sim
         if run.poll() == 0:
-            return self.__stdout_str
+            return True
         else:
             raise Exception('Moqui error')
-        
-        with open(log_file) as f:
-            f.write(self.__stdout_str)

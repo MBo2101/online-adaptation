@@ -9,6 +9,8 @@ import numpy as np
 import os
 import shutil
 import subprocess
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 from RTArrays import RTArray, TranslationVF
 
 '''
@@ -36,7 +38,7 @@ class PlastimatchAdaptive(object):
     def get_default_value(input_file):
         '''
         Returns default value of input ITK file.
-        Assuming CT or CBCT for dtype = 'f' --> -1000
+        Assuming CT or CBCT for dtype = 'f' --> -1001
         Assuming binary mask for dtype = 'uint8' --> 0
         
         Args:
@@ -45,7 +47,7 @@ class PlastimatchAdaptive(object):
         arr = RTArray(input_file)
         
         if arr.data_type is np.dtype('f'):
-            return -1000
+            return -1001
         
         elif arr.data_type is np.dtype('uint8'):
             return 0
@@ -167,7 +169,7 @@ class PlastimatchAdaptive(object):
                        z_lower=0,
                        z_upper=0,
                        unit='vox',
-                       default_value=-1000):
+                       default_value=-1001):
         '''
         Method extends and/or crops image array (rectangular cuboid).
         Bound parameters are given in number of voxels or mm.
@@ -345,6 +347,25 @@ class PlastimatchAdaptive(object):
                                 output = output_file)
 
     @staticmethod
+    def sum_images(output_image, *images):
+        '''
+        Sums input images.
+        
+        Args:
+            output_image --> path to output image (str)
+            images --> paths to input images (str)
+        '''
+        
+        if len(images) < 2:
+            raise Exception('Need at least two image files.')
+        
+        images_string = ' '.join(images)
+        input_string = 'plastimatch add '+images_string+ ' --output {}'.format(output_image)
+        
+        sum_images = subprocess.Popen([input_string], shell=True)
+        sum_images.wait()
+
+    @staticmethod
     def apply_manual_translation(input_file,
                                  output_file,
                                  output_vf,
@@ -367,7 +388,6 @@ class PlastimatchAdaptive(object):
         
         dirpath = os.path.dirname(input_file)
         temp_path = os.path.join(dirpath, 'ext_temp.mha')
-        translation_vf = TranslationVF(path = output_vf, skip_load=True)
         
         arr = RTArray(path = input_file)
         
@@ -429,17 +449,17 @@ class PlastimatchAdaptive(object):
         PlastimatchAdaptive.run('synth-vf',
                                 fixed = temp_path,
                                 xf_trans = translation_str,
-                                output = translation_vf.path)
+                                output = output_vf)
         
         if arr.data_type is np.dtype('uint8'):
             PlastimatchAdaptive.warp_mask(input_file,
                                           output_file,
-                                          translation_vf.path)
+                                          output_vf)
         
         elif arr.data_type is np.dtype('f'):
             PlastimatchAdaptive.warp_image(input_file,
                                            output_file,
-                                           translation_vf.path)
+                                           output_vf)
         
         os.remove(temp_path)
     
@@ -468,7 +488,7 @@ class PlastimatchAdaptive(object):
                       -z, -z/arr.spacing_z))
 
     @staticmethod
-    def warp_image(input_file, output_file, input_vf, default_value=-1000):
+    def warp_image(input_file, output_file, input_vf, default_value=-1001):
         '''
         Warps image using an input vector field.
         For binary masks use "warp_mask" instead.
@@ -490,7 +510,7 @@ class PlastimatchAdaptive(object):
                                 )
     
     @staticmethod
-    def mask_image(input_file, output_file, mask, mask_value=-1000):
+    def mask_image(input_file, output_file, mask, mask_value=-1001):
         '''
         Masks image using an input mask.
         
@@ -508,7 +528,7 @@ class PlastimatchAdaptive(object):
                                 mask_value = mask_value)
 
     @staticmethod
-    def fill_image(input_file, output_file, mask, mask_value=-1000):
+    def fill_image(input_file, output_file, mask, mask_value=-1001):
         '''
         Fills image using an input mask.
         
@@ -524,6 +544,38 @@ class PlastimatchAdaptive(object):
                                 output = output_file,
                                 mask = mask,
                                 mask_value = mask_value)
+    
+    @staticmethod
+    def fill_image_threshold(input_file, output_file, threshold, option='above', mask_value=-1001):
+        '''
+        Fills image voxels above or below a given threshold.
+        
+        Args:
+            input_file --> path to input file (str)
+            output_file --> path to output file (str)
+            threshold --> threshold value used to separate voxels (int / float)
+            option --> defines how voxels are separated: "above" or "below" (str)
+            mask_value --> numeric value that is applied inside the mask volume (int / float)
+        '''
+        dirpath = os.path.dirname(input_file)
+        temp = os.path.join(dirpath, 'mask_temp.mha')
+        
+        if option == 'above':
+            PlastimatchAdaptive.run('threshold',
+                                    above = threshold,
+                                    input = input_file,
+                                    output = temp)
+        elif option == 'below':
+            PlastimatchAdaptive.run('threshold',
+                                    below = threshold,
+                                    input = input_file,
+                                    output = temp)
+        PlastimatchAdaptive.run('fill',
+                                input = input_file,
+                                output = output_file,
+                                mask = temp,
+                                mask_value = mask_value)
+        os.remove(temp)
 
     @staticmethod
     def DICOM_to_ITK(input_dicom, output_image=None, structures=None, dose_map=None):
@@ -531,9 +583,9 @@ class PlastimatchAdaptive(object):
         Converts DICOM to ITK.
         
         Args:
-            input_dicom --> path to input dicom folder or file (str)
+            input_dicom --> path to input dicom directory or file (str)
             output_image --> path to output image (str)
-            structures --> path to output folder for structures (str)
+            structures --> path to output directory for structures (str)
             dose_map --> path to output dose image (str)
         '''
         
@@ -544,14 +596,15 @@ class PlastimatchAdaptive(object):
                                 output_prefix = structures,
                                 output_dose_img = dose_map)
     
-    def ITK_to_DICOM(output_dicom_folder, input_image=None, structures=None, dose_map=None):
+    @staticmethod
+    def ITK_to_DICOM(output_dicom_dir, input_image=None, structures=None, dose_map=None):
         '''
         Converts ITK to DICOM.
         
         Args:
-            output_dicom_folder --> path to output dicom folder (str)
+            output_dicom_dir --> path to output dicom directory (str)
             input_image --> path to input image (str)
-            structures --> path to input folder for structures (str)
+            structures --> path to input directory for structures (str)
             dose_map --> path to input dose image (str)
         '''
         
@@ -559,10 +612,10 @@ class PlastimatchAdaptive(object):
                                 input = input_image,
                                 input_prefix = structures,
                                 input_dose_img = dose_map,
-                                output_dicom = output_dicom_folder)
+                                output_dicom = output_dicom_dir)
 
     @staticmethod
-    def resample_to_reference(input_file, output_file, reference_image):
+    def resample_to_reference(input_file, output_file, reference_image, default_value=-1001):
         '''
         Resamples image based on reference.
         
@@ -570,12 +623,14 @@ class PlastimatchAdaptive(object):
             input_file --> path to input file (str)
             output_file --> path to output file (str)
             reference_image --> path to reference image (str)
+            default_value --> numeric value that is applied to the background (int / float)
         '''
         
         PlastimatchAdaptive.run('resample',
                                 input = input_file,
                                 output = output_file,
-                                fixed = reference_image)
+                                fixed = reference_image,
+                                default_value = default_value)
 
     #%% Structure methods
     
@@ -590,7 +645,7 @@ class PlastimatchAdaptive(object):
             distance --> expansion in mm (int / float)
         '''
         
-        dirpath = os.path.dirname(input_mask.path)
+        dirpath = os.path.dirname(input_mask)
         temp = os.path.join(dirpath, 'mask_dmap_temp.mha')
         
         PlastimatchAdaptive.run('dmap',
@@ -650,7 +705,7 @@ class PlastimatchAdaptive(object):
     @staticmethod
     def get_union(output_mask, *masks):
         '''
-        Generates union of provided masks.
+        Generates union of input masks.
         
         Args:
             output_mask --> path to output mask (str)
@@ -675,7 +730,7 @@ class PlastimatchAdaptive(object):
     @staticmethod
     def get_intersection(output_mask, *masks):
         '''
-        Generates intersection of provided masks.
+        Generates intersection of input masks.
         
         Args:
             output_mask --> path to output mask (str)
@@ -752,6 +807,7 @@ class PlastimatchAdaptive(object):
                                 output = output_mask,
                                 below = threshold_value)
     
+    @staticmethod
     def get_bbox(input_mask, output_mask, margin):
         '''
         Generates a bounding box around input mask.
@@ -767,6 +823,7 @@ class PlastimatchAdaptive(object):
                                 margin = margin,
                                 output = output_mask)
     
+    @staticmethod
     def get_shell(input_mask, output_mask, distance):
         '''
         Generates a shell around input mask.
@@ -903,7 +960,7 @@ class PlastimatchAdaptive(object):
                                     moving_mask=None,
                                     metric='mse',
                                     reg_factor=1,
-                                    default_value=-1000):
+                                    default_value=-1001):
         '''
         Writes Plastimatch command file and runs deformable image registration.
         
@@ -983,6 +1040,7 @@ class PlastimatchAdaptive(object):
                                                                  metric = metric))
         
         PlastimatchAdaptive.run(command_file_path)
+        os.remove(command_file_path)
 
     @staticmethod
     def register_3_DOF(fixed_image,
@@ -992,7 +1050,7 @@ class PlastimatchAdaptive(object):
                        fixed_mask=None,
                        moving_mask=None,
                        metric='mse',
-                       default_value=-1000):
+                       default_value=-1001):
         '''
         Writes Plastimatch command file and runs 3-DOF image registration.
         
@@ -1007,7 +1065,7 @@ class PlastimatchAdaptive(object):
             default_value --> numeric value that is applied to the background (int / float)
         '''
 
-        dirpath = os.path.dirname(moving_image.path)
+        dirpath = os.path.dirname(moving_image)
         command_file_path = os.path.join(dirpath, 'register_3_DOF_command_file.txt')
 
         with open(command_file_path, 'w') as f:
@@ -1044,6 +1102,7 @@ class PlastimatchAdaptive(object):
                                                                  metric = metric))
         
         PlastimatchAdaptive.run(command_file_path)
+        os.remove(command_file_path)
 
     @staticmethod
     def register_6_DOF(fixed_image,
@@ -1053,7 +1112,7 @@ class PlastimatchAdaptive(object):
                        fixed_mask=None,
                        moving_mask=None,
                        metric='mse',
-                       default_value=-1000):
+                       default_value=-1001):
         '''
         Writes Plastimatch command file and runs 6-DOF image registration.
         
@@ -1068,7 +1127,7 @@ class PlastimatchAdaptive(object):
             default_value --> numeric value that is applied to the background (int / float)
         '''
 
-        dirpath = os.path.dirname(moving_image.path)
+        dirpath = os.path.dirname(moving_image)
         command_file_path = os.path.join(dirpath, 'register_6_DOF_command_file.txt')
 
         with open(command_file_path, 'w') as f:
@@ -1105,16 +1164,18 @@ class PlastimatchAdaptive(object):
                                                                  metric = metric))
         
         PlastimatchAdaptive.run(command_file_path)
+        os.remove(command_file_path)
         
     @staticmethod
     def match_position_3_DOF(fixed_image,
                              moving_image,
                              output_image,
                              output_vf,
-                             metric='mse'):
+                             metric='mi'):
         '''
         Matches patient position with a 3-DOF vector field.
         Retains original image dimensions/size/spacing.
+        For big offsets, metric='mi' works better. (?)
         
         Args:
             fixed_image --> path to input fixed image (str)
@@ -1129,7 +1190,7 @@ class PlastimatchAdaptive(object):
         
         PlastimatchAdaptive.register_3_DOF(fixed_image,
                                            moving_image,
-                                           output_vf_path = vf_temp_path,
+                                           output_vf = vf_temp_path,
                                            metric = metric)
         
         vf_temp = TranslationVF(vf_temp_path)
@@ -1149,11 +1210,11 @@ class PlastimatchAdaptive(object):
                              output_contours,
                              input_vf):
         '''
-        Applies input vector field to all contours in folder.
+        Applies input vector field to all contours in directory.
         
         Args:
-            input_contours --> path to folder containing input structures (str)
-            output_contours --> path to folder to store deformed structures (str)
+            input_contours --> path to directory containing input structures (str)
+            output_contours --> path to directory to store deformed structures (str)
             input_vf --> path to input vector field (str)
         '''
         
@@ -1168,6 +1229,8 @@ class PlastimatchAdaptive(object):
                            output_contours,
                            fixed_image,
                            moving_image,
+                           output_image=None,
+                           output_vf=None,
                            fixed_mask=None,
                            moving_mask=None,
                            reg_factor = 1,
@@ -1176,19 +1239,21 @@ class PlastimatchAdaptive(object):
         Propagates contours from one image to another.
         
         Args:
-            input_contours --> path to folder containing input structures (str)
-            output_contours --> path to folder to store deformed structures (str)
+            input_contours --> path to directory containing input structures (str)
+            output_contours --> path to directory to store deformed structures (str)
             fixed_image --> path to input fixed image (str)
             moving_image --> path to input moving image (str)
+            output_image --> path to output deformed image (str)
+            output_vf --> path to output vector field (str)
             fixed_mask --> path to input fixed mask (str)
             moving_mask --> path to input moving mask (str)
+            reg_factor --> regularization multiplier (int / float)
             translate_first --> option to match images in 3D before running DIR (bool)
         '''
         
         dirpath = os.path.dirname(moving_image)
         var = os.path.splitext(moving_image)
         
-        deformed_img = var[0] + '_deformed' + var[1]
         deformation_vf = os.path.join(dirpath, 'vf_dir.mha')
         
         if translate_first is True:
@@ -1212,7 +1277,7 @@ class PlastimatchAdaptive(object):
         
         PlastimatchAdaptive.register_deformable_bspline(fixed_image,
                                                         moving_image,
-                                                        deformed_img,
+                                                        output_image,
                                                         deformation_vf,
                                                         fixed_mask,
                                                         moving_mask,
@@ -1221,9 +1286,196 @@ class PlastimatchAdaptive(object):
         PlastimatchAdaptive.apply_vf_to_contours(input_contours,
                                                  output_contours,
                                                  deformation_vf)
-            
+        
         if translate_first is True:
+            if output_vf is not None:
+                PlastimatchAdaptive.run('compose',
+                                        translation_vf,
+                                        deformation_vf,
+                                        output_vf)
+            os.remove(translated_img)
+            os.remove(translation_vf)
             shutil.rmtree(temp_contours)
+        
+        if translate_first is False:
+            if output_vf is not None:
+                shutil.copyfile(deformation_vf, output_vf)
+        
+        os.remove(deformation_vf)
             
         print('\nContour propagation: DONE.')
 
+    #%% Histogram-based correction: use for CBCT HU correction
+    
+    @staticmethod
+    def values_histogram_matching(input_image,
+                                  reference_image,
+                                  output_image,
+                                  input_image_masks=None,
+                                  reference_image_masks=None,
+                                  output_image_masks=None,
+                                  histogram_threshold_min=-500,
+                                  histogram_threshold_max=1500,
+                                  correction_type='mean'):
+        '''
+        Modifies values of input image to match the histogram of reference image.
+        
+        Args:
+            input_image             --> path to input image (str)
+            reference_image         --> path to reference image (str)
+            output_image            --> path to output image (str)
+            input_image_masks       --> paths to masks specifying the ROI for the input image histogram (list / tuple)
+            reference_image_masks   --> paths to masks specifying the ROI for the reference image histogram (list / tuple)
+            output_image_masks      --> paths to masks specifying the ROI where in the input image value matching is applied (list / tuple)
+            histogram_threshold_min --> lower threshold for the values to be considered in the HU correction (int / float)
+            histogram_threshold_max --> upper threshold for the values to be considered in the HU correction (int / float)
+            correction_type         --> specifies which correction method is used (str)
+                                    --> 'full' will apply a piecewise linear correction based on cumulative histograms
+                                    --> 'mean' will shift values based on the mean of the histogram
+                                    --> 'median' will shift values based on the median of the histogram
+                                    --> 'none' will just read and compare the histograms of the two image files without any corrections
+        '''
+        dirpath = os.path.dirname(output_image)
+        histogram_matching_dir = os.path.join(dirpath, 'histogram_matching')
+        if not os.path.exists(histogram_matching_dir):
+            os.maskedirs(histogram_matching_dir)
+        input_image_temp = os.path.join(dirpath, 'input_temp.mha')
+        reference_image_temp = os.path.join(dirpath, 'reference_temp.mha')
+        # Mask image files
+        if input_image_masks is not None:
+            input_mask_temp = os.path.join(dirpath, 'input_mask_temp.mha')
+            if len(input_image_masks) > 1:
+                PlastimatchAdaptive.get_union(input_mask_temp, *input_image_masks)
+            elif len(input_image_masks) == 1:
+                shutil.copyfile(input_image_masks[0], input_mask_temp)
+            PlastimatchAdaptive.mask_image(input_image,
+                                           input_image_temp,
+                                           input_mask_temp,
+                                           histogram_threshold_min-1)
+        if reference_image_masks is not None:
+            reference_mask_temp = os.path.join(dirpath, 'reference_mask_temp.mha')
+            if len(reference_image_masks) > 1:
+                PlastimatchAdaptive.get_union(reference_mask_temp, *reference_image_masks)
+            elif len(reference_image_masks) == 1:
+                shutil.copyfile(reference_image_masks[0], reference_mask_temp)
+            PlastimatchAdaptive.mask_image(reference_image,
+                                           reference_image_temp,
+                                           reference_mask_temp,
+                                           histogram_threshold_min-1)
+        # Load arrays
+        arr_1 = RTArray(reference_image_temp).array_1D
+        arr_2 = RTArray(input_image_temp).array_1D
+        arr_1 = np.delete(arr_1, np.where(arr_1 < histogram_threshold_min))
+        arr_2 = np.delete(arr_2, np.where(arr_2 < histogram_threshold_min))
+        arr_1 = np.delete(arr_1, np.where(arr_1 > histogram_threshold_max))
+        arr_2 = np.delete(arr_2, np.where(arr_2 > histogram_threshold_max))
+        n_bins = int(histogram_threshold_max - histogram_threshold_min)
+        # Generate plot 1:
+        reference_name = os.path.splitext(os.path.basename(reference_image))
+        input_name = os.path.splitext(os.path.basename(input_image))
+        fig, axes = plt.subplots(2)
+        counts_arr_1, range_arr_1, bar_container = axes[1].hist(arr_1, bins = n_bins,      cumulative=True, alpha=0.7, label=reference_name)
+        counts_arr_2, range_arr_2, bar_container = axes[1].hist(arr_2, bins = range_arr_1, cumulative=True, alpha=0.7, label=input_name)
+        axes[0].hist(arr_1, bins = n_bins,      cumulative=False, alpha=0.7, label=reference_name)
+        axes[0].hist(arr_2, bins = range_arr_1, cumulative=False, alpha=0.7, label=input_name)
+        axes[0].axvline(np.mean(arr_1), ls='--', c='darkblue', alpha=0.8, linewidth=1, label='{} mean'.format(reference_name), zorder=-1)
+        axes[0].axvline(np.mean(arr_2), ls='--', c='maroon',   alpha=0.8, linewidth=1, label='{} mean'.format(input_name),     zorder=-1)
+        axes[0].legend()
+        axes[0].set_xlabel('Image values (a.u.)')
+        axes[1].set_xlabel('Image values (a.u.)')
+        fig.set_dpi(100)
+        plt.tight_layout()
+        plt.savefig(os.path.join(histogram_matching_dir, 'histograms_pre_matching.png'))
+        plt.show()
+        os.remove(input_image_temp)
+        os.remove(reference_image_temp)
+        os.remove(input_image_masks)
+        os.remove(reference_image_masks)
+        if correction_type == 'none':
+            return
+        # Method 1: Piecewise linear correction based on cumulative histograms
+        elif correction_type == 'full':
+            f = interp1d(counts_arr_1, range_arr_1[:-1], fill_value='extrapolate')
+            new_image_values = []
+            conversion_str = ''
+            for arr_1_value in range_arr_1[:-1]:
+                iterator = np.where(range_arr_1 == arr_1_value)[0][0]
+                arr_2_value = float(f(counts_arr_2[iterator]))
+                new_image_values.append(arr_2_value)
+                conversion_str = conversion_str + '{},{},'.format(arr_1_value, arr_2_value)
+            g = interp1d(range_arr_1[:-1], new_image_values)
+            plt.figure(dpi=100)
+            plt.plot(range_arr_1[:-1], g(range_arr_1[:-1]))
+            plt.plot(range_arr_1[:-1], range_arr_1[:-1], alpha = 0.7, ls='--')
+            plt.grid(ls='--')
+            plt.xlabel('Values old')
+            plt.ylabel('Values new')
+            plt.savefig(os.path.join(histogram_matching_dir, 'histogram_matching_curve.png'))
+            plt.show()
+            PlastimatchAdaptive.run('adjust',
+                                    input = input_image,
+                                    output = output_image,
+                                    pw_linear = conversion_str[:-1])
+            with open(os.path.join(histogram_matching_dir, 'histogram_matching_info.txt'), 'w') as f:
+                f.write('Applied piece-wise linear correction.\n')
+                f.write('Function:\n')
+                f.write(conversion_str[:-1])
+        # Method 2: Shifting values based on mean or median
+        else:
+            values_temp = os.path.join(dirpath, 'values.mha')
+            if correction_type == 'mean':
+                difference = np.mean(arr_1) - np.mean(arr_2)
+            if correction_type == 'median':
+                difference = np.median(arr_1) - np.median(arr_2)
+            PlastimatchAdaptive.run('synth',
+                                    fixed = input_image,
+                                    output = values_temp,
+                                    background = str(difference),
+                                    foreground = str(difference))
+            PlastimatchAdaptive.sum_images(output_image, input_image, values_temp)
+            with open(os.path.join(histogram_matching_dir, 'histogram_matching_info.txt'), 'w') as f:
+                f.write('Applied shift based on {}.\n'.format(correction_type))
+                f.write('Function:\n')
+                f.write('+{}'.format(difference))
+            os.remove(values_temp)
+        # Compare histograms for corrected image --> generate plot 2
+        if input_image_masks is not None:
+            output_image_temp = os.path.join(dirpath, 'output_image_temp.mha')
+            PlastimatchAdaptive.mask_image(output_image,
+                                           output_image_temp,
+                                           input_mask_temp,
+                                           histogram_threshold_min-1)
+            arr_2 = RTArray(output_image_temp).array_1D
+            os.remove(output_image_temp)
+        else:
+            arr_2 = RTArray(output_image).array_1D
+        arr_1 = RTArray(reference_image_temp).array_1D
+        arr_1 = np.delete(arr_1, np.where(arr_1 < histogram_threshold_min))
+        arr_2 = np.delete(arr_2, np.where(arr_2 < histogram_threshold_min))
+        arr_1 = np.delete(arr_1, np.where(arr_1 > histogram_threshold_max))
+        arr_2 = np.delete(arr_2, np.where(arr_2 > histogram_threshold_max))
+        n_bins = int(histogram_threshold_max - histogram_threshold_min)
+        # Generate plot 1:
+        reference_name = os.path.splitext(os.path.basename(reference_image))
+        input_name = os.path.splitext(os.path.basename(input_image))
+        fig, axes = plt.subplots(2)
+        counts_arr_1, range_arr_1, bar_container = axes[1].hist(arr_1, bins = n_bins,      cumulative=True, alpha=0.7, label=reference_name)
+        counts_arr_2, range_arr_2, bar_container = axes[1].hist(arr_2, bins = range_arr_1, cumulative=True, alpha=0.7, label=input_name)
+        axes[0].hist(arr_1, bins = n_bins,      cumulative=False, alpha=0.7, label=reference_name)
+        axes[0].hist(arr_2, bins = range_arr_1, cumulative=False, alpha=0.7, label=input_name)
+        axes[0].axvline(np.mean(arr_1), ls='--', c='darkblue', alpha=0.8, linewidth=1, label='{} mean'.format(reference_name), zorder=-1)
+        axes[0].axvline(np.mean(arr_2), ls='--', c='maroon',   alpha=0.8, linewidth=1, label='{} mean'.format(input_name),     zorder=-1)
+        axes[0].legend()
+        axes[0].set_xlabel('Image values (a.u.)')
+        axes[1].set_xlabel('Image values (a.u.)')
+        fig.set_dpi(100)
+        plt.tight_layout()
+        plt.savefig(os.path.join(histogram_matching_dir, 'histograms_post_matching.png'))
+        plt.show()
+        # Getting final image
+        if output_image_masks is not None:
+            PlastimatchAdaptive.merge_images(input_image,
+                                             output_image,
+                                             output_image,
+                                             *output_image_masks)
+        

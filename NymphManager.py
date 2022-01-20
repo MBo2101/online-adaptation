@@ -13,6 +13,7 @@ from time import time
 class NymphManager(object):
 
     def __init__(self, dij_matrix, preexisting_dose=None):
+        self.dir_path = '/shared/build/nymph'
         self.exe_path = '/shared/build/nymph/nymph'
         self.dij_path = '/shared/build/nymph/dij.bin'
         self.functions_path = '/shared/build/nymph/functions.bin'
@@ -29,6 +30,7 @@ class NymphManager(object):
         self.nnz_values = dij_matrix.nnz_values
         self.preexisting_dose = preexisting_dose
         self.beamlet_scales = None
+        self.set_dij_list()
 
     # Methods: general
     
@@ -40,24 +42,32 @@ class NymphManager(object):
     def print_functions(self):
         # TODO: finish function to document used objectives/constraints
         pass
-        
+    
+    def set_dij_list(self):
+        self.dij_list = []
+        self.dij_list.append(np.array([0], dtype='u8'))
+        self.dij_list.append(np.array([0], dtype='u8'))
+        self.dij_list.append(np.array([self.n_voxels], dtype='u8'))
+        self.dij_list.append(np.array([self.n_beamlets], dtype='u8'))
+        self.dij_list.append(np.array([self.nnz_elements], dtype='u8'))
+        self.dij_list.append(self.nnz_voxels.astype('u8'))
+        self.dij_list.append(self.nnz_beamlets.astype('u8'))
+        self.dij_list.append(self.nnz_values.astype('f'))
+        if self.preexisting_dose is not None:
+            if np.any(self.preexisting_dose):
+                self.dij_list.append(np.array([0], dtype='u8'))
+                self.dij_list.append(np.array([10], dtype='u8'))
+                self.dij_list.append(np.array([len(self.preexisting_dose)], dtype='u8'))
+                self.dij_list.append(self.preexisting_dose.astype('d'))
+    
     def write_dij_input(self, file_path=None):
         '''
         Writes Dij matrix to binary file for Nymph input.
         '''
         file_path = self.dij_path if file_path is None else file_path
-        arr = np.array([0,0,
-                        self.n_voxels,
-                        self.n_beamlets,
-                        self.nnz_elements])
         with open(file_path, 'bw') as f:
-            f.write(arr.astype('u8').tobytes())
-            f.write(self.nnz_voxels.astype('u8').tobytes())
-            f.write(self.nnz_beamlets.astype('u8').tobytes())
-            f.write(self.nnz_values.astype('f').tobytes())
-            if self.preexisting_dose is not None:
-                f.write(np.array([0, 10, len(self.preexisting_dose)]).astype('u8').tobytes())
-                f.write(self.preexisting_dose.astype('d').tobytes())
+            for i in self.dij_list:
+                f.write(i.tobytes())
     
     def write_functions_input(self, file_path=None):
         '''
@@ -74,15 +84,24 @@ class NymphManager(object):
         self.write_functions_input()
         print('Starting Nymph optimization:')
         start_opt = time()
-        run_opt = subprocess.Popen([self.exe_path,
-                                    '-dij', self.dij_path,
-                                    '-f', self.functions_path,
-                                    '-o', self.output_path], stdout=subprocess.PIPE)
-        run_opt.wait()
+        run = subprocess.Popen([self.exe_path,
+                                '-dij', self.dij_path,
+                                '-f', self.functions_path,
+                                '-o', self.output_path,
+                                '-s'], cwd=self.dir_path, stdout=subprocess.PIPE)
+        while True:
+            output_line = run.stdout.readline().decode('utf-8')
+            if run.poll() is not None: break
+            if output_line:
+                self.log += output_line
+                print(output_line.strip())
         end_opt = time()
-        self.log += (run_opt.stdout.read()).decode('utf-8')
         self.opt_time += end_opt - start_opt
-        self.beamlet_scales = self.read_output()
+        if run.poll() == 0:
+            self.beamlet_scales = self.read_output()
+            return True
+        else:
+            raise Exception('Nymph error')
         
     def read_output(self, file_path=None):
         '''
@@ -95,12 +114,6 @@ class NymphManager(object):
             scaling_factors = struct.unpack('d'*n_beamlets, file_bytes[8:])
         return np.array(scaling_factors, dtype='d')
 
-    def print_properties(self):
-        c = self.__class__
-        props = [p for p in dir(c) if isinstance(getattr(c,p), property) and hasattr(self,p)]
-        for p in props:
-            print(p + ' = ' +str(getattr(self, p)))
-
     # Methods: defining functions
     
     def clear_functions(self):
@@ -108,21 +121,18 @@ class NymphManager(object):
         self.functions_string = ''
     
     def add_dose_function(self, obj_type, obj_or_con, weight, parameter, scenario, voxel_indices):
-        if obj_type not in [0,1,2,3,4,5,6,7,20,21,22]:
-            raise Exception('Unknown objective type.')
-        if obj_type == 20:
-            raise Exception('Use "minimize_weighted_sum" for this objective type.')
-        if obj_type == 21:
-            raise Exception('Use "minimize_worst_case" for this objective type.')
-        if obj_type == 22:
-            raise Exception('Use "minimize_functions_CVaR" for this objective type.')
-        parameter = parameter if obj_type >3 else None
+        if obj_type not in [0,1,2,3,4,5,6,7,20,21,22]: raise Exception('Unknown objective type.')
+        if obj_type == 20: raise Exception('Use "minimize_weighted_sum" for this objective type.')
+        if obj_type == 21: raise Exception('Use "minimize_worst_case" for this objective type.')
+        if obj_type == 22: raise Exception('Use "minimize_functions_CVaR" for this objective type.')
         n_voxels = len(voxel_indices)
-        lst = [np.array([obj_type, obj_or_con]).astype('B'),
-               np.array([weight, parameter])[np.array([weight, parameter])!=None].astype('d'),
-               np.array([scenario, n_voxels]).astype('Q'),
-               np.array(voxel_indices).astype('Q')]
-        for i in lst: self.functions_list.append(i)
+        self.functions_list.append(np.array([obj_type], dtype='B'))
+        self.functions_list.append(np.array([obj_or_con], dtype='B'))
+        self.functions_list.append(np.array([weight], dtype='d'))
+        if obj_type>3: self.functions_list.append(np.array([parameter], dtype='d'))
+        self.functions_list.append(np.array([scenario], dtype='Q'))
+        self.functions_list.append(np.array([n_voxels], dtype='Q'))
+        self.functions_list.append(voxel_indices.astype('Q'))
 
     def minimize_weighted_sum(self, weight, obj_indices, obj_weights):
         if not len(obj_indices) == len(obj_weights):
@@ -130,12 +140,12 @@ class NymphManager(object):
         obj_type = 20
         obj_or_con = 0
         n_objectives = len(obj_indices)
-        lst = [np.array([obj_type, obj_or_con]).astype('B'),
-               np.array([weight]).astype('d'),
-               np.array([n_objectives]).astype('Q'),
-               np.array(obj_indices).astype('Q'),
-               np.array(obj_weights).astype('d')]
-        for i in lst: self.functions_list.append(i)
+        self.functions_list.append(np.array([obj_type], dtype='B'))
+        self.functions_list.append(np.array([obj_or_con], dtype='B'))
+        self.functions_list.append(np.array([weight], dtype='d'))
+        self.functions_list.append(np.array([n_objectives], dtype='Q'))
+        self.functions_list.append(obj_indices.astype('Q'))
+        self.functions_list.append(obj_weights.astype('d'))
 
     def minimize_worst_case(self, weight, obj_indices, obj_weights, obj_offsets):
         if not len(obj_indices) == len(obj_weights) == len(obj_offsets):
@@ -143,33 +153,44 @@ class NymphManager(object):
         obj_type = 21
         obj_or_con = 0
         n_objectives = len(obj_indices)
-        lst = [np.array([obj_type, obj_or_con]).astype('B'),
-               np.array([weight]).astype('d'),
-               np.array([n_objectives]).astype('Q'),
-               np.array(obj_indices).astype('Q'),
-               np.array(obj_weights).astype('d'),
-               np.array(obj_offsets).astype('d')]
-        for i in lst: self.functions_list.append(i)
+        self.functions_list.append(np.array([obj_type], dtype='B'))
+        self.functions_list.append(np.array([obj_or_con], dtype='B'))
+        self.functions_list.append(np.array([weight], dtype='d'))
+        self.functions_list.append(np.array([n_objectives], dtype='Q'))
+        self.functions_list.append(obj_indices.astype('Q'))
+        self.functions_list.append(obj_weights.astype('d'))
+        self.functions_list.append(obj_offsets.astype('d'))
         
     def minimize_functions_CVaR(self, weight, alpha, obj_indices):
         obj_type = 22
         obj_or_con = 0
-        n_objectives = len(obj_indices)
-        lst = [np.array([obj_type, obj_or_con]).astype('B'),
-               np.array([weight, alpha]).astype('d'),
-               np.array([n_objectives]).astype('Q'),
-               np.array(obj_indices).astype('Q')]
-        for i in lst: self.functions_list.append(i)
+        n_objectives = len(obj_indices)        
+        self.functions_list.append(np.array([obj_type], dtype='B'))
+        self.functions_list.append(np.array([obj_or_con], dtype='B'))
+        self.functions_list.append(np.array([weight], dtype='d'))
+        self.functions_list.append(np.array([alpha], dtype='d'))
+        self.functions_list.append(np.array([n_objectives], dtype='Q'))
+        self.functions_list.append(obj_indices.astype('Q'))
 
-    def mimic_dose(self, dose_map, weight=1, scenario=0, voxel_indices=None):
+    def mimic_dose(self, dose_array, weight=1, scenario=0, voxel_indices=None):
+        '''
+        Sets objective to mimic input dose distribution.
+        '''
         if voxel_indices is None:
-            voxel_indices = np.arange(0, len(dose_map))
-        if not len(voxel_indices) == len(dose_map):
+            voxel_indices = np.arange(0, len(dose_array))
+        if not len(voxel_indices) == len(dose_array):
             raise Exception('Array sizes do not match.')
         self.add_dose_function(4, 0, weight, -123.456, scenario, voxel_indices)
-        self.functions_list.append(dose_map.astype('d'))
+        self.functions_list.append(dose_array.astype('d'))
         self.add_dose_function(5, 0, weight, -123.456, scenario, voxel_indices)
-        self.functions_list.append(dose_map.astype('d'))
+        self.functions_list.append(dose_array.astype('d'))
+        
+    def set_mean_dose(self, voxel_indices, dose, weight=1, scenario=0):
+        '''
+        Sets objective to get a homogeneous dose distribution for input voxel indices.
+        '''
+        self.add_dose_function(4, 0, weight, dose, scenario, voxel_indices)
+        self.add_dose_function(5, 0, weight, dose, scenario, voxel_indices)
 
 #%%
 # Nymph instructions

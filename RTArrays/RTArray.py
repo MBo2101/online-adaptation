@@ -7,7 +7,7 @@ Created on Tue Jul 13 10:30:55 2021
 
 import os
 import numpy as np
-from medpy.io import load
+from medpy.io import load, save
 # Consider using SimpleITK instead of MedPy
 
 '''
@@ -23,7 +23,7 @@ class RTArray(object):
         skip_load --> option to skip load when 'path' is provided (bool)
         header_only --> option to not save array into memory (bool)
     '''
-    def __init__(self, *args, **kwargs):
+    def __init__(self, arg=None, **kwargs):
         
         self.__path = kwargs.get('path')
         self.__ndarray = kwargs.get('ndarray')
@@ -31,10 +31,14 @@ class RTArray(object):
         self.__skip_load = kwargs.get('skip_load')
         self.__header_only = kwargs.get('header_only')
         
-        for arg in args:
-            if type(arg) is str:
-                if self.__path is None:
-                    self.__path = arg
+        if type(arg) is str:
+            if self.__path is None:
+                self.__path = arg
+        elif type(arg) is np.ndarray:
+            if np.ndim(arg) == 1:
+                self.__array_1D = arg
+            else:
+                self.__ndarray = arg
                     
         if self.__path is not None:
             if self.__skip_load is not True:
@@ -42,6 +46,7 @@ class RTArray(object):
                     self.load_header()
                 else:
                     self.load_file()
+        
         if self.__array_1D is None:
             if self.__ndarray is not None:
                 if np.ndim(self.__ndarray) == 3:
@@ -58,6 +63,20 @@ class RTArray(object):
         if path != '':
             self.__path = path
         return self.__path
+    @property
+    def filename(self):
+        if self.__path is not None:
+            if os.path.isfile(self.__path):
+                self.__filename = os.path.basename(self.__path)
+        return self.__filename
+    @property
+    def name(self):
+        if self.__filename is not None:
+            self.__name =  os.path.splitext(self.__filename)[0]
+        return self.__name
+    @property
+    def header(self):
+        return self.__header
     @property
     def ndarray(self):
         return self.__ndarray
@@ -147,7 +166,11 @@ class RTArray(object):
     @path.setter
     def path(self, var):
         self.__path = var
-        
+
+    @header.setter
+    def header(self, var):
+        self.__header = var
+
     @ndarray.setter
     def ndarray(self, var):
         self.__ndarray = var
@@ -178,6 +201,9 @@ class RTArray(object):
         self.__size_x = temp.shape[0]
         self.__size_y = temp.shape[1]
         self.__size_z = temp.shape[2]
+
+    def save_file(self, path):
+        save(self.__ndarray, path, hdr=self.__header)
 
     def print_properties(self):
         c = self.__class__
