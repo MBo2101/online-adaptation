@@ -13,6 +13,7 @@ class BeamModel(object):
     def __init__(self, name):
         self.name = name
         self.MU2Gp = self.get_MU2Gp_factor
+        self.Gp2MU = self.get_Gp2MU_factor
 
     def get_MU2Gp_factor(self, beamlet_energy):
     
@@ -32,3 +33,6 @@ class BeamModel(object):
 
         elif self.name == 'r330_01r':
             return (1.0-0.99/100)*(-4.54e-12*beamlet_energy**5+3.8144e-09*beamlet_energy**4-1.255e-06*beamlet_energy**3+0.00020231*beamlet_energy**2-0.015917*beamlet_energy+1.5402)/1e9
+
+    def get_Gp2MU_factor(self, beamlet_energy):
+        return 1/self.get_MU2Gp_factor(beamlet_energy)

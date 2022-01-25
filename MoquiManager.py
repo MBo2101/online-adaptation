@@ -12,7 +12,7 @@ from time import time
 class MoquiManager(object):
 
     def __init__(self, machine_name):
-        self.exe_path = '/shared/build/moqui/moqui_adaptive_seed_test'
+        self.exe_path = '/shared/build/moqui/moqui_adaptive_v5'
         self.machine_name = machine_name
         self.log = ''
         self.sim_time = 0
@@ -23,7 +23,12 @@ class MoquiManager(object):
                        mode,
                        image_file=None,
                        tramps_dir=None,
-                       masks=None):
+                       masks=None,
+                       random_seed=1000):
+        '''
+        Runs Moqui simulation.
+        '''
+        RandomSeed = str(random_seed)
         Scorer = mode
         ScoringMask = 'false'
         Mask = None
@@ -40,7 +45,7 @@ class MoquiManager(object):
         file_text = '## Global parameters for simulation'\
                     '\n'\
                     '\nGPUID 0'\
-                    '\nRandomSeed 1000 # (integer, use negative value if use current time)'\
+                    '\nRandomSeed {} # (integer, use negative value if use current time)'\
                     '\nUseAbsolutePath true'\
                     '\nTotalThreads -1 # (integer, use negative value for using optimized number of threads)'\
                     '\nMaxHistoriesPerBatch 0'\
@@ -62,7 +67,7 @@ class MoquiManager(object):
                     '\nSimulationType perBeam'\
                     '\nBeamNumbers 0'\
                     '\nSourceExtension tramp'\
-                    '\nParticlesPerHistory 10000'\
+                    '\nParticlesPerHistory 20000'\
                     '\nCTClipping true'\
                     '\nMachine MGH:{}'\
                     '\nScoreToCTGrid true'\
@@ -76,7 +81,8 @@ class MoquiManager(object):
                     '\n## Data directories'\
                     '\n'\
                     '\nDicomDir {}'\
-                    .format(Scorer,
+                    .format(RandomSeed,
+                            Scorer,
                             ScoringMask,
                             Mask,
                             Machine,

@@ -41,6 +41,7 @@ class RTArray(object):
                 self.__ndarray = arg
                     
         if self.__path is not None:
+            self.__filename = os.path.basename(self.__path)
             if self.__skip_load is not True:
                 if self.__header_only is True:
                     self.load_header()
@@ -65,10 +66,8 @@ class RTArray(object):
         return self.__path
     @property
     def filename(self):
-        if self.__path is not None:
-            if os.path.isfile(self.__path):
-                self.__filename = os.path.basename(self.__path)
-        return self.__filename
+        if self.__filename is not None:
+            return self.__filename
     @property
     def name(self):
         if self.__filename is not None:

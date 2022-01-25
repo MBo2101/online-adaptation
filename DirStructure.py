@@ -8,12 +8,12 @@ Created on Wed Jul 14 10:28:25 2021
 import os
 import shutil
 import pandas as pd
+from time import time
+from DataPlotter import DVHPlotter
 from DicomPlan import DicomPlan
 from MoquiManager import MoquiManager
 from PlanAdaptation import PlanAdaptation
 from PlastimatchAdaptive import PlastimatchAdaptive
-from time import time
-from Plots import get_all_patient_plots
 
 class DirStructure(object):
     
@@ -134,6 +134,7 @@ class DirStructure(object):
 
     def set_structure_names(self, targets, oars, external, artifacts):
         dij_masks = targets + oars
+        if None in dij_masks : dij_masks.remove(None)
         self.targets = targets
         self.oars = oars
         self.external = external
@@ -155,7 +156,7 @@ class DirStructure(object):
         output_target = os.path.join(contours_dir, self.__target_filename)
         output_dij    = os.path.join(contours_dir, self.__dij_mask_filename)
         output_shell  = os.path.join(contours_dir, self.__shell_filename)
-        output_temp   = os.path.join(contours_dir, 'mask_temp.mha')
+        output_temp   = os.path.join(contours_dir, 'temp.mha')
         target_masks = [os.path.join(contours_dir, name+'.mha') for name in self.targets]
         dij_masks    = [os.path.join(contours_dir, name+'.mha') for name in self.dij_masks]
         # 1: target
@@ -180,6 +181,26 @@ class DirStructure(object):
         output_shell = os.path.join(contours_dir, self.__shell_filename)
         PlastimatchAdaptive.exclude_masks(output_dij, output_shell, *target_masks)
 
+    def modify_image_HUs(self, fraction_name):
+        '''
+        Modifies HUs in image file based on the external and artifacts mask.
+        '''
+        dct = self.get_fraction_dirs(fraction_name)
+        image_file = dct['image_file']
+        contours_dir = dct['contours_dir']
+        # Raise values below -1000 HUs to -1000 (Moqui considers -1000 as vacuum)
+        PlastimatchAdaptive.fill_image_threshold(image_file,
+                                                 image_file,
+                                                 threshold = -1000,
+                                                 option = 'below',
+                                                 mask_value= -1000)
+        if self.external is not None:
+            external_mask = os.path.join(contours_dir, self.external+'.mha')
+            PlastimatchAdaptive.mask_image(image_file, image_file, external_mask, mask_value=-1001)
+        if self.artifacts is not None:
+            artifacts_mask = os.path.join(contours_dir, self.artifacts+'.mha')
+            PlastimatchAdaptive.fill_image(image_file, image_file, artifacts_mask, mask_value=26)
+
     def match_cbcts_isocenter(self, reference_ct_name='ct'):
         '''
         Matches CBCTs to reference CT images.
@@ -193,8 +214,8 @@ class DirStructure(object):
             cbct_image_file = dct['image_file']
             cbct_contours_dir = dct['contours_dir']
             cbct_transforms_dir = dct['transforms_dir']
-            FOV_mask   = os.path.join(cbct_contours_dir, self.__FOV_full_filename)
-            FOV_mask_2 = os.path.join(cbct_contours_dir, self.__FOV_small_filename)
+            FOV_full  = os.path.join(cbct_contours_dir, self.__FOV_full_filename)
+            FOV_small = os.path.join(cbct_contours_dir, self.__FOV_small_filename)
             vf_3_DOF = os.path.join(cbct_transforms_dir, self.__vf_3_DOF_filename.format(self.ct_name))
             vf_6_DOF = os.path.join(cbct_transforms_dir, self.__vf_6_DOF_filename.format(self.ct_name))
             # Generate CBCT's FOV mask
@@ -204,7 +225,7 @@ class DirStructure(object):
                                     radius = '130',
                                     background = '0',
                                     foreground = '1',
-                                    output = FOV_mask,
+                                    output = FOV_full,
                                     output_type = 'uchar')
             PlastimatchAdaptive.run('synth',
                                     fixed = cbct_image_file,
@@ -212,7 +233,7 @@ class DirStructure(object):
                                     radius = '120',
                                     background = '0',
                                     foreground = '1',
-                                    output = FOV_mask_2,
+                                    output = FOV_small,
                                     output_type = 'uchar')
             # 3-DOF matching; retains original image dimensions/size/spacing
             PlastimatchAdaptive.match_position_3_DOF(fixed_image = self.ct_image_file,
@@ -237,16 +258,16 @@ class DirStructure(object):
             os.remove(registration_mask)
             os.remove(vf_rigid_ct_grid)
             # Match CBCT's FOV mask
-            PlastimatchAdaptive.warp_mask(FOV_mask, FOV_mask, vf_3_DOF)
-            PlastimatchAdaptive.warp_mask(FOV_mask, FOV_mask, vf_6_DOF)
-            PlastimatchAdaptive.warp_mask(FOV_mask_2, FOV_mask_2, vf_3_DOF)
-            PlastimatchAdaptive.warp_mask(FOV_mask_2, FOV_mask_2, vf_6_DOF)
+            PlastimatchAdaptive.warp_mask(FOV_full, FOV_full, vf_3_DOF)
+            PlastimatchAdaptive.warp_mask(FOV_full, FOV_full, vf_6_DOF)
+            PlastimatchAdaptive.warp_mask(FOV_small, FOV_small, vf_3_DOF)
+            PlastimatchAdaptive.warp_mask(FOV_small, FOV_small, vf_6_DOF)
             # Resample CBCT and FOV mask to CT dimensions
             PlastimatchAdaptive.resample_to_reference(cbct_image_file, cbct_image_file, self.ct_image_file, -1000)
-            PlastimatchAdaptive.resample_to_reference(FOV_mask, FOV_mask, self.ct_image_file, 0)
-            PlastimatchAdaptive.resample_to_reference(FOV_mask_2, FOV_mask_2, self.ct_image_file, 0)
+            PlastimatchAdaptive.resample_to_reference(FOV_full, FOV_full, self.ct_image_file, 0)
+            PlastimatchAdaptive.resample_to_reference(FOV_small, FOV_small, self.ct_image_file, 0)
 
-    def run_DIR(self, reference_ct_name='ct'):
+    def run_cbcts_DIR(self, reference_ct_name='ct'):
         '''
         Runs DIR between CT and CBCT.
         Output VF is used for contour propagation and dose deformation.
@@ -282,35 +303,16 @@ class DirStructure(object):
         cbct_goal_dose = os.path.join(cbct_dose_maps_dir, self.__goal_dose_filename)
         PlastimatchAdaptive.warp_image(self.goal_dose, cbct_goal_dose, vf_dir, default_value = 0)
     
-    def modify_image_HUs(self, fraction_name):
-        '''
-        Modifies HUs in image file based on the external and artifacts mask.
-        '''
-        dct = self.get_fraction_dirs(fraction_name)
-        image_file = dct['image_file']
-        contours_dir = dct['contours_dir']
-        PlastimatchAdaptive.fill_image_threshold(image_file,
-                                                 image_file,
-                                                 threshold = -1000,
-                                                 option = 'below',
-                                                 mask_value= -1000)
-        if self.external is not None:
-            external_mask = os.path.join(contours_dir, self.external+'.mha')
-            PlastimatchAdaptive.mask_image(image_file, image_file, external_mask, mask_value=-1001)
-        if self.artifacts is not None:
-            artifacts_mask = os.path.join(contours_dir, self.artifacts+'.mha')
-            PlastimatchAdaptive.fill_image(image_file, image_file, artifacts_mask, mask_value=26)
-    
     def modify_cbct_beyond_FOV(self, fraction_name):
         # Using deformed CT as the background image
         dct = self.get_fraction_dirs(fraction_name)
         fraction_dir = dct['fraction_dir']
         image_file = dct['image_file']
         contours_dir = dct['contours_dir']
-        FOV_mask = os.path.join(contours_dir, self.__FOV_full_filename)
+        FOV_full = os.path.join(contours_dir, self.__FOV_full_filename)
         # background_image = self.ct_image_file
         background_image = os.path.join(fraction_dir, self.__ct_deformed_filename)
-        PlastimatchAdaptive.merge_images(background_image, image_file, image_file, FOV_mask)
+        PlastimatchAdaptive.merge_images(background_image, image_file, image_file, FOV_full)
     
     def apply_cbct_HU_histogram_correction(self, fraction_name):
         # Using deformed CT as the reference image
@@ -319,29 +321,24 @@ class DirStructure(object):
         image_file = dct['image_file']
         contours_dir = dct['contours_dir']
         ct_deformed = os.path.join(fraction_dir, self.__ct_deformed_filename)
-        # Get histogram mask --> exclude artifacts from external, intersect with small FOV
+        # Get histogram mask --> intersect external with small FOV, exclude artifacts
         histogram_mask = os.path.join(fraction_dir, 'histogram_mask_temp.mha')
-        PlastimatchAdaptive.exclude_masks(os.path.join(contours_dir, self.external+'.mha'),
+        PlastimatchAdaptive.get_intersection(histogram_mask,
+                                             os.path.join(contours_dir, self.external+'.mha'),
+                                             os.path.join(contours_dir, self.__FOV_small_filename))
+        PlastimatchAdaptive.exclude_masks(histogram_mask,
                                           histogram_mask,
                                           os.path.join(contours_dir, self.artifacts+'.mha'))
-        PlastimatchAdaptive.get_intersection(histogram_mask,
-                                             os.path.join(contours_dir, self.__FOV_small_filename),
-                                             histogram_mask)
-        PlastimatchAdaptive.values_histogram_matching(image_file,
-                                                      ct_deformed,
-                                                      os.path.join(fraction_dir, 'corrected_mean.mha'),
-                                                      [histogram_mask],
-                                                      [histogram_mask],
-                                                      [histogram_mask],
-                                                      -500, 1500, 'mean')
-        PlastimatchAdaptive.values_histogram_matching(image_file,
-                                                      ct_deformed,
-                                                      os.path.join(fraction_dir, 'corrected_full.mha'),
-                                                      [histogram_mask],
-                                                      [histogram_mask],
-                                                      [histogram_mask],
-                                                      -500, 1500, 'full')
-        # os.remove(histogram_mask)
+        for method in ['mean', 'median', 'full']:
+            output_file = os.path.join(fraction_dir, 'corrected_{}.mha'.format(method))
+            PlastimatchAdaptive.values_histogram_matching(image_file,
+                                                          ct_deformed,
+                                                          output_file,
+                                                          [histogram_mask],
+                                                          [histogram_mask],
+                                                          [histogram_mask],
+                                                          -500, 1500, method)
+        os.remove(histogram_mask)
         
     def run_dose_calculation(self, fraction_name, plan_name):
         dct = self.get_fraction_dirs(fraction_name)
@@ -368,8 +365,8 @@ class DirStructure(object):
         output_dir = os.path.join(fraction_dir, plan_name)
         dose_names = [i for i in os.listdir(output_dir) if '_dose.mha' in i]
         dose_files = [os.path.join(output_dir, i) for i in dose_names]
+        output_dose_file = os.path.join(dose_maps_dir, fraction_name+'_'+plan_name+'.mha')
         if len(dose_files) > 1:
-            output_dose_file = os.path.join(dose_maps_dir, fraction_name+'_'+plan_name+'.mha')
             PlastimatchAdaptive.sum_images(output_dose_file, *dose_files)
         elif len(dose_files) == 1:
             shutil.copyfile(dose_files[0], output_dose_file)
@@ -399,7 +396,7 @@ class DirStructure(object):
                          structures = structures)
         self.convert_dose(fraction_name, plan_name+'_adapted')
 
-    def get_plastimatch_DVHs(self, fraction_name):
+    def get_plastimatch_DVHs(self, fraction_name, structure_names=['all']):
         dct = self.get_fraction_dirs(fraction_name)
         image_file = dct['image_file']
         contours_dir = dct['contours_dir']
@@ -425,7 +422,8 @@ class DirStructure(object):
                                     dose_units = 'gy',
                                     num_bins = '901',
                                     bin_width = '0.1')
-        get_all_patient_plots(dvhs_dir, self.dij_masks)
+        plots = DVHPlotter()
+        plots.get_all_patient_plots(dvhs_dir, structure_names)
     
     def purge(self):
         if os.path.exists(self.patient_dir):

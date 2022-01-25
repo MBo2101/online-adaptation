@@ -715,17 +715,19 @@ class PlastimatchAdaptive(object):
         if len(masks) < 2:
             raise Exception('Need at least two mask files.')
         
-        if os.path.exists(output_mask):
-            os.remove(output_mask)
+        dirpath = os.path.dirname(masks[0])
+        temp = os.path.join(dirpath, 'mask_temp.mha')
         
-        shutil.copyfile(masks[0], output_mask)
+        shutil.copyfile(masks[0], temp)
         
         for mask in masks[1:]:
             
             PlastimatchAdaptive.run('union',
-                                    output_mask,
+                                    temp,
                                     mask,
-                                    output = output_mask)
+                                    output = temp)
+        
+        shutil.move(temp, output_mask)
 
     @staticmethod
     def get_intersection(output_mask, *masks):
@@ -740,19 +742,24 @@ class PlastimatchAdaptive(object):
         if len(masks) < 2:
             raise Exception('Need at least two mask files.')
         
-        shutil.copyfile(masks[0], output_mask)
+        dirpath = os.path.dirname(masks[0])
+        temp = os.path.join(dirpath, 'mask_temp.mha')
+        
+        shutil.copyfile(masks[0], temp)
         
         for mask in masks[1:]:
             
             PlastimatchAdaptive.run('add',
-                                    output_mask,
+                                    temp,
                                     mask,
-                                    output = output_mask)
+                                    output = temp)
     
         PlastimatchAdaptive.run('threshold',
-                                input = output_mask,
+                                input = temp,
                                 output = output_mask,
                                 above = len(masks))
+        
+        os.remove(temp)
 
     @staticmethod
     def exclude_masks(input_mask, output_mask, *excluded_masks):
@@ -764,24 +771,28 @@ class PlastimatchAdaptive(object):
             output_mask --> path to output mask (str)
             excluded_masks --> paths to masks to exclude from "input_mask" (str)
         '''
-        # TODO: Check if function works well.
         
         if len(excluded_masks) < 1:
             raise Exception('Need at least one mask file to exclude.')
         
-        shutil.copyfile(input_mask, output_mask)
+        dirpath = os.path.dirname(input_mask)
+        temp = os.path.join(dirpath, 'mask_temp.mha')
+        
+        shutil.copyfile(input_mask, temp)
         
         for mask in excluded_masks:
 
             PlastimatchAdaptive.run('diff',
-                                    output_mask,
+                                    temp,
                                     mask,
-                                    output_mask)
+                                    temp)
         
         PlastimatchAdaptive.run('convert',
-                                input = output_mask,
+                                input = temp,
                                 output_type = 'uchar',
                                 output_img = output_mask)
+        
+        os.remove(temp)
     
     @staticmethod
     def get_empty_mask(reference_image, output_mask, value='zeros'):

@@ -78,8 +78,8 @@ class DicomPlan(object):
         if self.machine_name is None:
             print('No treatment machine name found. Please input the machine name:')
             self.machine_name = input()
-        beam_model = BeamModel(self.machine_name)
-        self.weights_Gp = beam_model.MU2Gp(self.energies) * self.weights_MU
+        self.beam_model = BeamModel(self.machine_name)
+        self.weights_Gp = self.beam_model.MU2Gp(self.energies) * self.weights_MU
         # Indexing
         u, ind = np.unique(self.labels, return_index=True)
         self.beam_names = u[np.argsort(ind)]
@@ -126,6 +126,24 @@ class DicomPlan(object):
                         self.y_coordinates,
                         self.weights_Gp]).T
         return arr
+
+    def write_adapted_dicom_rtplan(self, output_rtplan_file):
+        weights_MU_adapted = self.beam_model.Gp2MU(self.energies) * self.weights_Gp
+        for beam_index in range(len(self.pydicom_ds.IonBeamSequence)):
+            beam_name = self.pydicom_ds.IonBeamSequence[beam_index].BeamName
+            if beam_name == 'Setup': continue
+            indices = np.where(self.labels == beam_name)[0]
+            weights = weights_MU_adapted[indices]
+            ICPS = self.pydicom_ds.IonBeamSequence[beam_index].IonControlPointSequence
+            n_layers = int(len(ICPS)/2)
+            beamlet_index_total = 0
+            for layer_index in range(n_layers):
+                n_spots_in_layer = int(len(ICPS[layer_index*2].ScanSpotPositionMap)/2)
+                for beamlet_index in range(n_spots_in_layer):
+                    if n_spots_in_layer == 1: ICPS[layer_index*2].ScanSpotMetersetWeights = weights[beamlet_index_total]
+                    else: ICPS[layer_index*2].ScanSpotMetersetWeights[beamlet_index] = weights[beamlet_index_total]
+                    beamlet_index_total += 1
+        pydicom.dcmwrite(output_rtplan_file, self.pydicom_ds)
 
     def set_beamlet_subset(self, w, b=None):
         '''

@@ -14,8 +14,8 @@ class DijMatrix(object):
     '''
     Keywords arguments:
         csr_matrix --> CSR matrix (scipy.sparse.csr.csr_matrix)
-        npz_file --> path to npz file (string)
-        npz_dir --> path to directory containing npz files (string)
+        npz_file --> path to npz file (str)
+        npz_dir --> path to directory containing npz files (str)
         factor --> factor to apply to Dij matrix (int / float)
         mask_indices --> indices of mask to apply to Dij matrix (numpy.array)
     '''
@@ -46,8 +46,10 @@ class DijMatrix(object):
     def get_csr_matrix_from_dir(self):
         '''
         Returns CSR matrix (stacked) for all npz files in directory.
+        Assuming npz filenames are indexed.
         '''
         npz_filenames = [i for i in os.listdir(self.npz_dir) if '.npz' in i]
+        npz_filenames.sort()
         npz_filepaths = [os.path.join(self.npz_dir, i) for i in npz_filenames]
         csr_matrices = [sparse.load_npz(i) for i in npz_filepaths]
         csr_matrix = sparse.vstack(csr_matrices, format='csr')
