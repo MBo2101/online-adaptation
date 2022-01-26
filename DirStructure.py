@@ -11,6 +11,7 @@ import pandas as pd
 from time import time
 from DataPlotter import DVHPlotter
 from DicomPlan import DicomPlan
+from EvaluationManager import EvaluationManager
 from MoquiManager import MoquiManager
 from PlanAdaptation import PlanAdaptation
 from PlastimatchAdaptive import PlastimatchAdaptive
@@ -396,12 +397,29 @@ class DirStructure(object):
                          structures = structures)
         self.convert_dose(fraction_name, plan_name+'_adapted')
 
-    def get_plastimatch_DVHs(self, fraction_name, structure_names=['all']):
+    def get_DVHs(self, fraction_name, structure_names=['all']):
         dct = self.get_fraction_dirs(fraction_name)
         image_file = dct['image_file']
         contours_dir = dct['contours_dir']
         dose_maps_dir = dct['dose_maps_dir']
         dvhs_dir = dct['dvhs_dir']
+        evaluation = EvaluationManager(structures_dir = contours_dir)
+        for dose_name in os.listdir(dose_maps_dir):
+            dose_file = os.path.join(dose_maps_dir, dose_name)
+            # Check if dose grid matches image grid (= contours grid)
+            if PlastimatchAdaptive.run('header', dose_file) == PlastimatchAdaptive.run('header', image_file):
+                output_dvh = os.path.join(dvhs_dir, 'data', os.path.splitext(dose_name)[0]+'.dvh')
+                evaluation.set_dose(dose_file)
+                evaluation.calculate_DVH(save_path = output_dvh)
+        plots = DVHPlotter()
+        plots.get_all_patient_plots(dvhs_dir, structure_names)
+        
+    def get_plastimatch_DVHs(self, fraction_name, structure_names=['all']):
+        dct = self.get_fraction_dirs(fraction_name)
+        image_file = dct['image_file']
+        contours_dir = dct['contours_dir']
+        dose_maps_dir = dct['dose_maps_dir']
+        dvhs_dir = dct['dvhs_dir']+'_plastimatch'
         output_ss_img = os.path.join(dvhs_dir, 'structs_ss_{}.mha'.format(fraction_name))
         output_ss_list = os.path.join(dvhs_dir, 'structs_ss_{}.txt'.format(fraction_name))
         PlastimatchAdaptive.run('convert',

@@ -14,13 +14,18 @@ class Structure(RTArray):
         self.base_value = 0.
     
     # Properties
+
+    @property
+    def n_voxels(self):
+        if self.array_1D is not None:
+            n_voxels = np.count_nonzero(self.array_1D==1)
+        elif self.ndarray is not None:
+            n_voxels = np.count_nonzero(self.ndarray==1)
+        return n_voxels
     
     @property
     def volume(self):
-        if self.ndarray is None:
-            self.load_file()
-        voxels = np.count_nonzero(self.ndarray==1)
-        return voxels * self.voxel_volume
+        return self.n_voxels * self.voxel_volume
 
     @property
     def voxel_indices(self):
@@ -28,24 +33,46 @@ class Structure(RTArray):
     
     # Methods
     
-    def get_intersection_indices(self, structure):
+    def get_indices_of_intersection(self, structure):
         '''
-        Returns intersection (voxel indices) with other structure (Structure class).
+        Returns voxel indices of intersection with other structure (Structure class).
         '''
         return np.intersect1d(self.voxel_indices, structure.voxel_indices)
     
-    def get_union_indices(self, structure):
+    def get_indices_of_union(self, structure):
         '''
-        Returns union (voxel indices) with other structure (Structure class).
+        Returns voxel indices of union with other structure (Structure class).
         '''
         return np.union1d(self.voxel_indices, structure.voxel_indices)
     
-    def exclude_structure_indices(self, structure):
+    def get_indices_of_exclusion(self, structure):
         '''
-        Returns voxel indices excluding all voxels that are shared with other structure (Structure class).
+        Returns voxel indices after excluding all voxels that are shared with other structure (Structure class).
         Equivalent to logical operator minus/except.
         '''
         return np.setdiff1d(self.voxel_indices, structure.voxel_indices)
+
+    def get_intersection(self, structure):
+        '''
+        Returns instance of Structure class of intersection with other structure (Structure class).
+        '''
+        indices = self.get_indices_of_intersection(structure)
+        return Structure(array_1D = self.indices_to_array_1D(indices, self.n_voxels_total), header = self.header)
+    
+    def get_union(self, structure):
+        '''
+        Returns instance of Structure class of union with other structure (Structure class).
+        '''
+        indices = self.get_indices_of_union(structure)
+        return Structure(array_1D = self.indices_to_array_1D(indices, self.n_voxels_total), header = self.header)
+    
+    def get_exclusion(self, structure):
+        '''
+        Returns instance of Structure class after excluding all voxels that are shared with other structure (Structure class).
+        Equivalent to logical operator minus/except.
+        '''
+        indices = self.get_indices_of_exclusion(structure)
+        return Structure(array_1D = self.indices_to_array_1D(indices, self.n_voxels_total), header = self.header)
     
     def get_indices_in_mask(self, mask):
         '''
@@ -59,3 +86,10 @@ class Structure(RTArray):
         else:
             return self.voxel_indices
 
+    @staticmethod
+    def indices_to_array_1D(voxel_indices, n_voxels_total):
+        arr = np.zeros(n_voxels_total, dtype='uint8')
+        arr[voxel_indices] = 1
+        return arr
+        
+        

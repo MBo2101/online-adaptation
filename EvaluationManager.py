@@ -48,8 +48,15 @@ class EvaluationManager(object):
         names = [i.name for i in structures]
         self.structures = dict(zip(names, structures))
     
+    def add_structure(self, structure, name=None):
+        '''
+        Manually adds structure to structures dictionary.
+        '''
+        name = structure.name if name is None else name
+        self.structures[name] = structure
+    
     def get_structure_dose(self, structure_name):
-        if self.dose.n_voxels != self.structures[structure_name].n_voxels:
+        if self.dose.n_voxels_total != self.structures[structure_name].n_voxels_total:
             raise Exception('Dose and structure array sizes do not match.')
         structure_voxels = self.structures[structure_name].voxel_indices
         return self.dose_array[structure_voxels]
@@ -64,18 +71,19 @@ class EvaluationManager(object):
         return np.min(self.get_structure_dose(structure_name))
     
     def get_integral_dose(self, structure_name):
-        # Unit: Gy*Liter
+        # Unit: Gy * Liter
         # Volume loaded in cm^3
         structure_volume = self.structures[structure_name].volume
         return self.get_mean_dose(structure_name) * structure_volume / 1000
     
     def calculate_DVH(self, num_bins=1000, structures_list=None, save_path=None):
         structures_list = self.structures.keys() if structures_list is None else structures_list
-        self.DVH_df = pd.DataFrame()
+        self.DVH_data_frame = pd.DataFrame()
         for structure_name in structures_list:
             structure_dose = self.get_structure_dose(structure_name)
             hist_range = (0, round(self.max_dose))
-            hist_bins  = round(self.max_dose) if num_bins is None else num_bins-1
+            # If num_bins ist not given --> set bins to steps of approx. 0.1 Gy
+            hist_bins  = round(self.max_dose*10)-2 if num_bins is None else num_bins-1
             differential_DVH, dose_values = np.histogram(structure_dose, hist_bins, hist_range)
             cumulative_DVH = np.zeros(len(differential_DVH)+1)
             index = 0
@@ -87,20 +95,46 @@ class EvaluationManager(object):
                 index += 1
             np.put(cumulative_DVH, index, cumulative_voxels)
             cumulative_DVH = cumulative_DVH[::-1]/cumulative_voxels
-            self.DVH_df[structure_name] = cumulative_DVH
-        self.DVH_df.insert(0, self.DVH_dose_label, dose_values)
+            self.DVH_data_frame[structure_name] = cumulative_DVH
+        self.DVH_data_frame.insert(0, self.DVH_dose_label, dose_values)
         if save_path is not None:
-            self.DVH_df.to_csv(save_path)
+            if not os.path.exists(os.path.dirname(save_path)):
+                os.makedirs(os.path.dirname(save_path))
+            self.DVH_data_frame.to_csv(save_path)
     
-    def evaluate_V(self, dose, structure_name):
-        DVH_dose = self.DVH_df[self.DVH_dose_label]
-        DVH_volume = self.DVH_df[structure_name]
+    def load_DVH(self, DVH_csv_file):
+        self.DVH_data_frame = pd.read_csv(DVH_csv_file)
+    
+    def evaluate_V(self, dose, structure_name, prescription=None):
+        '''
+        Units: Volume [%] / Dose [Gy]
+        For given prescription: Dose [%]
+        '''
+        DVH_dose = self.DVH_data_frame[self.DVH_dose_label]
+        DVH_volume = self.DVH_data_frame[structure_name]
         f = interp1d(DVH_dose, DVH_volume)
-        return float(f(dose))
+        if prescription is None:
+            return float(f(dose))*100
+        else:
+            return float(f(dose*prescription/100))*100
 
-    def evaluate_D(self, volume, structure_name):
-        DVH_dose = self.DVH_df[self.DVH_dose_label]
-        DVH_volume = self.DVH_df[structure_name]
+    def evaluate_D(self, volume, structure_name, prescription=None):
+        '''
+        Units: Volume [%] / Dose [Gy]
+        For given prescription: Dose [%]
+        '''
+        DVH_dose = self.DVH_data_frame[self.DVH_dose_label]
+        DVH_volume = self.DVH_data_frame[structure_name]
         f = interp1d(DVH_volume, DVH_dose)
-        return float(f(volume))
-    
+        if prescription is None:
+            return float(f(volume/100))
+        else:
+            return float(f(volume/100))/prescription*100
+        
+    def evaluate_D1cc(self, structure_name):
+        '''
+        Minimum dose deposited to the most irradiated 1 cubic centimeter of the structure.
+        '''
+        cc_in_percent = 1/self.structures[structure_name].volume*100
+        return self.evaluate_D(cc_in_percent, structure_name)
+

@@ -17,7 +17,8 @@ Superclass
 class RTArray(object):
     '''
     Keywords arguments:
-        path --> file path (string)
+        path --> file path (str)
+        header --> image header (medpy.io.header.Header)
         ndarray --> 3D or 4D array (numpy.ndarray)
         array_1D --> 1D array (numpy.ndarray)
         skip_load --> option to skip load when 'path' is provided (bool)
@@ -26,6 +27,7 @@ class RTArray(object):
     def __init__(self, arg=None, **kwargs):
         
         self.__path = kwargs.get('path')
+        self.__header = kwargs.get('header')
         self.__ndarray = kwargs.get('ndarray')
         self.__array_1D = kwargs.get('array_1D')
         self.__skip_load = kwargs.get('skip_load')
@@ -89,7 +91,7 @@ class RTArray(object):
         else:
             return self.__ndim
     @property
-    def n_voxels(self):
+    def n_voxels_total(self):
         if self.__array_1D is not None:
             return self.__array_1D.size
         elif self.__ndarray is not None:
@@ -98,7 +100,7 @@ class RTArray(object):
             elif self.__ndarray.ndim == 4:
                 return self.__ndarray.size/3
         else:
-            return self.__n_voxels
+            return self.__n_voxels_total
     @property
     def data_type(self):
         if self.__array_1D is not None:
@@ -195,7 +197,7 @@ class RTArray(object):
         self.__check_file()
         temp, self.__header = load(self.__path)
         self.__ndim = np.ndim(temp)
-        self.__n_voxels = temp.shape[0] * temp.shape[1] * temp.shape[2]
+        self.__n_voxels_total = temp.shape[0] * temp.shape[1] * temp.shape[2]
         self.__data_type = temp.dtype
         self.__size_x = temp.shape[0]
         self.__size_y = temp.shape[1]
